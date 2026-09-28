@@ -24,8 +24,8 @@
 | Офіційне джерело | https://roc-ng.github.io/XD-Violence/ (Wu et al., ECCV 2020) |
 | Використано | **офіційні** посилання: тестові відео — OneDrive (SharePoint Xidian University), архів `videos.zip` (10 804 733 011 Б), завантажено з терміналу (curl з cookie сесії публічного посилання); розмітка тесту — https://roc-ng.github.io/XD-Violence/images/annotations.txt (499 рядків: назва відео + пари «початковий / кінцевий кадр» насильницьких подій), опис міток — https://roc-ng.github.io/XD-Violence/images/ReadMe.md |
 | Умови | ліцензію на сторінці не зазначено; відео зібрано з фільмів і YouTube — використовуємо лише для досліджень, не поширюємо; цитувати Wu et al., ECCV 2020 |
-| Дата завантаження | 2026-09-28 |
-| Розмір / файли | _заповнити після розпакування_ |
+| Дата завантаження | 2026-09-28; цілісність архіву перевірено `unzip -t` (CRC усіх файлів — без помилок; контрольної суми OneDrive не надає) |
+| Розмір / файли | розпаковано в `data/raw/xd-violence/videos/`: 800 відео MP4, 10 870 237 075 Б — 300 нормальних (`label_A`) і 500 з насильством; з них Fighting (B1) — 126, Shooting (B2) — 104 (мітки множинні). Розмітка: 500 рядків (у 14 назва має зайвий суфікс `.mp4` — при зіставленні його прибирати), 1 238 інтервалів подій; кожне насильницьке відео має розмітку |
 
 ### US Real-time gun detection in CCTV (Севільський університет) → `data/raw/us-gun/`
 
@@ -35,8 +35,8 @@
 | Офіційне джерело | https://github.com/Deepknowledge-US/US-Real-time-gun-detection-in-CCTV-An-open-problem-dataset → сторінка https://deepknowledge-us.github.io/US-Real-time-gun-detection-in-CCTV-An-open-problem-dataset/ → Hugging Face `jsalazar/US-Real-time-gun-detection-in-CCTV-An-open-problem-dataset` (посилання зі сторінки авторів, тобто офіційне) |
 | Використано | «Mock attack dataset»: `weapons_images_2fps.zip` (1 485 МБ) — **кадри, розмічені з частотою 2 кадри/с** з камер Cam1 (607), Cam5 (1031), Cam7 (3511), рамки зброї. Відеофайлів у наборі немає. Синтетичний Unity-набір (U0.5 / U1 / U2.5 / U5) не завантажено — він потрібен лише для донавчання детектора |
 | Умови | CC BY-NC 4.0; безкоштовно для академічних досліджень із цитуванням Salazar González et al., Neural Networks, 2020 (doi:10.1016/j.neunet.2020.09.013); комерційне використання — лише за згодою авторів |
-| Дата завантаження | 2026-09-28 |
-| Розмір / файли | _заповнити після розпакування_ |
+| Дата завантаження | 2026-09-28 (`weapons_images_2fps.zip`, 1 485 019 798 Б, sha256 `558f5baa109abe8fba57b61fa177c75358001f5499f5e78178f4bf7dc9f55e8c` — збігається з LFS-хешем HF) |
+| Розмір / файли | розпаковано в `data/raw/us-gun/Images/`: 5 149 кадрів JPG 1920×1080 + 5 149 розміток Pascal VOC XML, 1 489 743 767 Б. Імена: `Cam<N>-…_Segment_<k>_x264_frame_<i>` — кадри одного сегмента утворюють послідовність 2 кадри/с. Об'єкти: Handgun 1 714, Short_rifle 797, Knife 210; кадрів без зброї 3 615 (70 %), зі зброєю 1 534 |
 
 ### Допоміжне тестове відео → `data/raw/vtest.avi`
 
