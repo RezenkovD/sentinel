@@ -21,13 +21,18 @@ cp .env.example .env    # секрети (токен бота, ключ LLM) —
 ## Запуск
 
 ```bash
-uv run sentinel bench --source data/raw/rwf2000/val/Fight/<clip>.avi   # замір швидкості (RTF, мс/кадр)
+uv run --with lap sentinel bench --source data/raw/rwf2000/val/Fight/<clip>.avi   # замір швидкості (RTF, мс/кадр)
+uv run --with lap sentinel bench --paced --source <clip>.avi                     # те саме в темпі живої камери
 uv run sentinel run --source 0                                          # вебкамера (ще не реалізовано)
 uv run sentinel run --source video.mp4 --paced                          # відеофайл у темпі живої камери (ще не реалізовано)
 uv run sentinel eval --config all                                       # експеримент (ще не реалізовано)
 ```
 
-Налаштування (частота аналізу, розмір входу, пороги) — `configs/default.yaml`.
+Налаштування (частота аналізу, розмір входу, пороги) — `configs/default.yaml`, трекер — `configs/bytetrack.yaml`.
+
+`--with lap`: трекер ByteTrack в Ultralytics потребує пакет `lap`, якого поки немає в залежностях проєкту
+(чекає рішення; до того `lap` береться тимчасово й без фіксації версії). Ultralytics не встановлює пакети сам:
+`sentinel` вимикає це (`YOLO_AUTOINSTALL=false`), а відсутні ваги не завантажуються автоматично — див. `data/SOURCES.md`.
 
 ## Розробка
 

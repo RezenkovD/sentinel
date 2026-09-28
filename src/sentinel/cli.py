@@ -38,6 +38,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     config = load_config(args.config)
     if args.command == "bench":
+        from sentinel.agents.pose_features import MatchRules
         from sentinel.bench import run_bench
 
         det, pose = args.weights or (config.models.person.weights, config.models.pose.weights)
@@ -54,7 +55,12 @@ def main(argv: list[str] | None = None) -> int:
             person_conf=config.models.person.conf,
             tracker_cfg=config.models.person.tracker,
             pose_conf=config.models.pose.conf,
-            min_iou=config.models.pose.min_iou,
+            pose_rules=MatchRules(
+                min_iou=config.models.pose.min_iou,
+                min_inside=config.models.pose.min_inside,
+                keypoint_conf=config.models.pose.keypoint_conf,
+                margin=config.models.pose.box_margin,
+            ),
             out=args.out or Path("results") / f"bench_{date.today().isoformat()}.md",
             paced=args.paced,
         )

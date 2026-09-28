@@ -15,11 +15,15 @@ models:
   person:
     weights: weights/yolo11n.pt
     conf: 0.1             # low on purpose: ByteTrack also uses low-score boxes (Ultralytics track default)
-    tracker: bytetrack.yaml
+    tracker: configs/bytetrack.yaml
   pose:
     weights: weights/yolo11n-pose.pt
     conf: 0.25
-    min_iou: 0.3          # a pose box is attached to the person track it overlaps most (IoU ≥ min_iou)
+    # A skeleton is attached to one track (highest box IoU first) only if both hold:
+    min_iou: 0.3          # box IoU between the skeleton's box and the track box
+    min_inside: 0.8       # share of confident keypoints inside the track box expanded by box_margin
+    keypoint_conf: 0.5    # a keypoint counts as confident from this score
+    box_margin: 0.1       # expansion of the track box, share of its width/height per side
 
 bench:
   imgsz: [640, 480, 416]

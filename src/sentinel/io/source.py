@@ -13,6 +13,7 @@ no faster than the fixed analysis rate.
 import math
 import threading
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Self
@@ -41,6 +42,10 @@ class LatestFrameReader:
     def __init__(self, source: str | int | Path, mode: Mode, target_fps: float | None = None) -> None:
         if mode not in ("live", "paced", "offline"):
             raise ValueError(f"unknown source mode: {mode!r}")
+        if target_fps is not None and not target_fps > 0:
+            raise ValueError(f"analysis rate must be positive, got {target_fps}")
+        if isinstance(source, str) and source.isdigit():
+            source = int(source)  # webcam index as given by argparse or YAML, e.g. "0"
         is_file = isinstance(source, Path) or (isinstance(source, str) and "://" not in source)
         if is_file and not Path(source).exists():
             raise FileNotFoundError(source)
@@ -59,6 +64,7 @@ class LatestFrameReader:
         self._cond = threading.Condition()
         self._pending: Frame | None = None
         self._eof = False
+        self._error: Exception | None = None
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._next_tick = 0.0
@@ -70,7 +76,10 @@ class LatestFrameReader:
             return ReaderStats(self._received, self._delivered, self._skipped)
 
     def read(self) -> Frame | None:
-        """Next frame to analyse, or None when the source has ended."""
+        """Next frame to analyse, or None when the source has ended.
+
+        Raises RuntimeError (caused by the original error) if reading the source failed.
+        """
         if self.mode == "offline":
             return self._read_offline()
         if self._thread is None:
@@ -83,6 +92,8 @@ class LatestFrameReader:
             frame, self._pending = self._pending, None
             if frame is not None:
                 self._delivered += 1
+            elif self._error is not None:
+                raise RuntimeError("reading the video source failed") from self._error
             return frame
 
     def close(self) -> None:
@@ -97,7 +108,7 @@ class LatestFrameReader:
     def __exit__(self, *exc: object) -> None:
         self.close()
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Frame]:
         while (frame := self.read()) is not None:
             yield frame
 
@@ -130,6 +141,17 @@ class LatestFrameReader:
         self._next_tick = max(self._next_tick, now) + 1.0 / self.target_fps
 
     def _pump(self) -> None:
+        try:
+            self._pump_frames()
+        except Exception as exc:  # handed to the consumer: a dead thread must not leave read() waiting
+            with self._cond:
+                self._error = exc
+        finally:
+            with self._cond:
+                self._eof = True
+                self._cond.notify_all()
+
+    def _pump_frames(self) -> None:
         started = time.monotonic()
         while not self._stop.is_set():
             ok, image = self._cap.read()
@@ -149,6 +171,3 @@ class LatestFrameReader:
                 self._pending = Frame(image=image, t=t, index=index)
                 self._received += 1
                 self._cond.notify_all()
-        with self._cond:
-            self._eof = True
-            self._cond.notify_all()

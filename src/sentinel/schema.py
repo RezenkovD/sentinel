@@ -69,8 +69,9 @@ class SceneDescription(_Contract):
     window: Window
     zone: Zone
     summary: Summary
-    persons: list[Person] = Field(default_factory=list)
-    interactions: list[Interaction] = Field(default_factory=list, max_length=5)
+    # Tuples, not lists: frozen=True alone would still allow in-place append/sort on shared input.
+    persons: tuple[Person, ...] = ()
+    interactions: tuple[Interaction, ...] = Field(default=(), max_length=5)
 
 
 class RiskResult(_Contract):

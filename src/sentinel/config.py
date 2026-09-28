@@ -33,6 +33,9 @@ class PoseModelConfig(_Section):
     weights: Path
     conf: float = Field(ge=0, le=1)
     min_iou: float = Field(ge=0, le=1)
+    min_inside: float = Field(ge=0, le=1)
+    keypoint_conf: float = Field(ge=0, le=1)
+    box_margin: float = Field(ge=0)
 
 
 class ModelsConfig(_Section):

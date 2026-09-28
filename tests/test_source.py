@@ -1,6 +1,8 @@
+import threading
 import time
 from pathlib import Path
 
+import cv2
 import numpy as np
 import pytest
 from conftest import GRAY_STEP, make_video
@@ -83,3 +85,66 @@ def test_paced_target_fps_limits_the_analysis_rate(video_30: Path):
 def test_missing_file_raises(tmp_path: Path):
     with pytest.raises(FileNotFoundError):
         LatestFrameReader(tmp_path / "nope.avi", mode="offline")
+
+
+class FakeCamera:
+    """Stand-in for cv2.VideoCapture of a camera: `frames` good reads, then `fail_with` or end of stream."""
+
+    opened_with: object = None
+
+    def __init__(self, source: object, frames: int = 3, fail_with: Exception | None = None) -> None:
+        FakeCamera.opened_with = source
+        self.left, self.fail_with = frames, fail_with
+
+    def isOpened(self) -> bool:  # noqa: N802 — mirrors the OpenCV API
+        return True
+
+    def get(self, prop: int) -> float:
+        return 30.0
+
+    def read(self) -> tuple[bool, np.ndarray | None]:
+        if self.left == 0:
+            if self.fail_with is not None:
+                raise self.fail_with
+            return False, None
+        self.left -= 1
+        return True, np.zeros((4, 4, 3), dtype=np.uint8)
+
+    def release(self) -> None:
+        pass
+
+
+def test_webcam_index_given_as_text_opens_the_camera(monkeypatch: pytest.MonkeyPatch):
+    # argparse and YAML deliver "0", and `sentinel run --source 0` is the documented webcam command.
+    monkeypatch.setattr(cv2, "VideoCapture", FakeCamera)
+    with LatestFrameReader("0", mode="live") as reader:
+        assert len(list(reader)) >= 1
+    assert FakeCamera.opened_with == 0
+
+
+def test_source_failure_is_raised_to_the_consumer_instead_of_hanging(monkeypatch: pytest.MonkeyPatch):
+    broken = cv2.error("stream broke")
+    monkeypatch.setattr(cv2, "VideoCapture", lambda source: FakeCamera(source, frames=3, fail_with=broken))
+    outcome: list[object] = []
+
+    def consume() -> None:
+        try:
+            with LatestFrameReader(0, mode="live") as reader:
+                for _ in reader:
+                    pass
+            outcome.append("ended quietly")
+        except Exception as exc:  # noqa: BLE001 — the test records whatever surfaces
+            outcome.append(exc)
+
+    worker = threading.Thread(target=consume, daemon=True)
+    worker.start()
+    worker.join(timeout=3)
+    assert not worker.is_alive(), "read() blocked forever after the source thread died"
+    assert len(outcome) == 1 and isinstance(outcome[0], RuntimeError)
+    assert outcome[0].__cause__ is broken
+
+
+@pytest.mark.parametrize("bad_fps", [0, -5])
+def test_non_positive_analysis_rate_is_rejected(video_30: Path, bad_fps: float):
+    with pytest.raises(ValueError):
+        LatestFrameReader(video_30, mode="offline", target_fps=bad_fps)

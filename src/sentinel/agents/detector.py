@@ -32,6 +32,8 @@ class PersonTracker:
     def __init__(
         self, weights: str | Path, imgsz: int, conf: float, tracker: str, device: str = "cpu"
     ) -> None:
+        if not Path(weights).exists():  # Ultralytics would silently download official weights instead
+            raise FileNotFoundError(f"weights not found: {weights} (see data/SOURCES.md)")
         self.model = YOLO(str(weights), task="detect")
         self.imgsz = imgsz
         self.conf = conf

@@ -88,6 +88,11 @@ def test_scene_cannot_be_modified_after_creation():
     scene = SceneDescription.model_validate(SPEC_EXAMPLE)
     with pytest.raises(ValidationError):
         scene.persons[0].speed = 5.0
+    with pytest.raises(AttributeError):
+        scene.persons.append(scene.persons[0])
+    with pytest.raises(AttributeError):
+        scene.interactions.clear()
+    assert json.loads(scene.model_dump_json()) == SPEC_EXAMPLE
 
 
 def test_holds_accepts_only_known_weapon_types():
@@ -105,7 +110,7 @@ def test_empty_scene_is_valid():
     scene = _scene(
         summary={"n_persons": 0, "crowd_motion": 0.0, "weapon_visible": False}, persons=[], interactions=[]
     )
-    assert scene.persons == [] and scene.interactions == []
+    assert scene.persons == () and scene.interactions == ()
 
 
 def test_at_most_five_interactions():

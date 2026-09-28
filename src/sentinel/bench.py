@@ -16,6 +16,7 @@ from typing import Protocol
 import numpy as np
 
 from sentinel.agents.detector import Track
+from sentinel.agents.pose_features import MatchRules
 from sentinel.io.source import LatestFrameReader
 
 
@@ -58,6 +59,7 @@ class BenchRow:
     threads: int | None
     measurement: Measurement
     clips: list[str] = field(default_factory=list)
+    warmup: int = 10
 
     @property
     def max_fps(self) -> float:
@@ -148,6 +150,7 @@ class PacedRow:
     threads: int | None
     result: PacedResult
     clips: list[str] = field(default_factory=list)
+    warmup: int = 10
 
 
 def run_paced(
@@ -279,6 +282,18 @@ def row_from_json(data: dict) -> BenchRow:
     return BenchRow(measurement=measurement, **data)
 
 
+def check_same_setup(logs: Sequence[Path], clips: list[str], warmup: int) -> None:
+    """Refuse to add a run to a report whose logged rows were measured on other clips or warm-up."""
+    for log in logs:
+        for row in _read_jsonl(log):
+            if row.get("clips") != clips or row.get("warmup", 10) != warmup:
+                raise ValueError(
+                    f"{log} already holds rows measured on {row.get('clips')} with warm-up "
+                    f"{row.get('warmup', 10)}; mixing runs would put them under one clip list — "
+                    "pass another --out"
+                )
+
+
 def append_row(jsonl: Path, row: BenchRow) -> list[BenchRow]:
     """Append a row to the JSONL log and return every row logged so far."""
     return [row_from_json(d) for d in _append_jsonl(jsonl, row)]
@@ -302,14 +317,7 @@ def environment_notes() -> list[str]:
         )
     except (OSError, StopIteration):
         pass
-    notes = [f"CPU: {cpu}", f"torch {torch.__version__}", f"ultralytics {ultralytics.__version__}"]
-    try:
-        import openvino
-
-        notes.append(f"openvino {openvino.__version__}")
-    except ImportError:
-        pass
-    return notes
+    return [f"CPU: {cpu}", f"torch {torch.__version__}", f"ultralytics {ultralytics.__version__}"]
 
 
 def clip_info(path: Path) -> str:
@@ -388,7 +396,7 @@ def run_bench(
     person_conf: float,
     tracker_cfg: str,
     pose_conf: float,
-    min_iou: float,
+    pose_rules: MatchRules,
     out: Path,
     paced: bool = False,
 ) -> Path:
@@ -397,12 +405,20 @@ def run_bench(
     from sentinel.agents.detector import PersonTracker
     from sentinel.agents.pose_features import PoseEstimator
 
+    jsonl, paced_jsonl = out.with_suffix(".jsonl"), out.with_suffix(".paced.jsonl")
+    clips = [s.name for s in sources]
+    check_same_setup([jsonl, paced_jsonl], clips, warmup)
+
     model = (
         det_weights.stem
         if pose_weights.stem == f"{det_weights.stem}-pose"
         else f"{det_weights.stem}+{pose_weights.stem}"
     )
+    label = backend
     if backend == "openvino":
+        import openvino
+
+        label = f"openvino {openvino.__version__.split('-')[0]}"
         det_weights, pose_weights = export_openvino(det_weights), export_openvino(pose_weights)
 
     def after_warmup() -> None:
@@ -413,22 +429,20 @@ def run_bench(
     def threads_used() -> int | None:
         return torch.get_num_threads() if backend == "torch" else None
 
-    jsonl, paced_jsonl = out.with_suffix(".jsonl"), out.with_suffix(".paced.jsonl")
-    clips = [s.name for s in sources]
     for imgsz in imgsz_list:
         for paced_fps in fps_list if paced else [None]:
             tracker = PersonTracker(
                 det_weights, imgsz=imgsz, conf=person_conf, tracker=tracker_cfg, device=device
             )
-            poser = PoseEstimator(pose_weights, imgsz=imgsz, conf=pose_conf, min_iou=min_iou, device=device)
+            poser = PoseEstimator(pose_weights, imgsz=imgsz, conf=pose_conf, rules=pose_rules, device=device)
             if paced_fps is None:
                 m = run_measurement(sources, tracker, poser, fps_list, warmup, after_warmup=after_warmup)
-                row = BenchRow(model, backend, device, imgsz, threads_used(), m, clips)
+                row = BenchRow(model, label, device, imgsz, threads_used(), m, clips, warmup)
                 append_row(jsonl, row)
                 print(render_table([row]), flush=True)
             else:
                 r = run_paced(sources, tracker, poser, paced_fps, warmup, after_warmup=after_warmup)
-                paced_row = PacedRow(model, backend, device, imgsz, threads_used(), r, clips)
+                paced_row = PacedRow(model, label, device, imgsz, threads_used(), r, clips, warmup)
                 append_paced_row(paced_jsonl, paced_row)
                 print(render_paced_table([paced_row]), flush=True)
             rows = [row_from_json(d) for d in _read_jsonl(jsonl)]

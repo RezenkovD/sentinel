@@ -3,8 +3,10 @@ import subprocess
 import sys
 
 import numpy as np
+import pytest
 
-from sentinel.agents.detector import Track, tracks_from_arrays
+from sentinel.agents.detector import PersonTracker, Track, tracks_from_arrays
+from sentinel.agents.pose_features import MatchRules, PoseEstimator
 
 
 def test_importing_sentinel_stops_ultralytics_from_installing_packages_at_runtime():
@@ -29,3 +31,14 @@ def test_tracks_keep_id_box_and_confidence():
         Track(track_id=8, box=(200.0, 30.0, 260.0, 180.0), conf=0.55),
     ]
     assert all(type(t.track_id) is int for t in tracks)
+
+
+def test_missing_weights_fail_fast_instead_of_being_downloaded(tmp_path):
+    # Ultralytics would silently fetch a missing official checkpoint, bypassing data/SOURCES.md.
+    missing = tmp_path / "yolo11n.pt"
+    with pytest.raises(FileNotFoundError):
+        PersonTracker(missing, imgsz=640, conf=0.1, tracker="bytetrack.yaml")
+    rules = MatchRules(min_iou=0.3, min_inside=0.8, keypoint_conf=0.5, margin=0.1)
+    with pytest.raises(FileNotFoundError):
+        PoseEstimator(tmp_path / "yolo11n-pose.pt", imgsz=640, conf=0.25, rules=rules)
+    assert not missing.exists()

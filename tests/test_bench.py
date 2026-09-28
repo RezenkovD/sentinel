@@ -14,6 +14,7 @@ from sentinel.bench import (
     Timing,
     append_paced_row,
     append_row,
+    check_same_setup,
     clip_info,
     render_table,
     run_measurement,
@@ -110,7 +111,15 @@ _TOTAL = Timing(70.0, 80.0)
 
 def _row(det: Timing = _ANY, pose: Timing = _ANY, total: Timing = _TOTAL) -> BenchRow:
     m = Measurement(det=det, pose=pose, total=total, frames=120, pose_coverage=0.85, rtf={8: 0.61, 10: 0.77})
-    return BenchRow(model="yolo11n", backend="torch", device="cpu", imgsz=640, threads=8, measurement=m)
+    return BenchRow(
+        model="yolo11n",
+        backend="torch",
+        device="cpu",
+        imgsz=640,
+        threads=8,
+        measurement=m,
+        clips=["fight_a.avi"],
+    )
 
 
 def test_rows_survive_the_jsonl_log_across_runs(tmp_path: Path):
@@ -174,3 +183,13 @@ def test_clip_info_reports_decodable_duration_of_a_truncated_file(tmp_path: Path
     info = clip_info(video)
     assert info.startswith("clip.avi: 64×48, 30 fps, ")
     assert not info.endswith("1.0 s")
+
+
+def test_report_refuses_to_mix_runs_on_different_clips_or_warmup(tmp_path: Path):
+    log = tmp_path / "bench.jsonl"
+    append_row(log, _row())  # measured on fight_a.avi with a 10-frame warm-up
+    check_same_setup([log, tmp_path / "no_such.paced.jsonl"], clips=["fight_a.avi"], warmup=10)
+    with pytest.raises(ValueError):
+        check_same_setup([log], clips=["nonfight_b.avi"], warmup=10)
+    with pytest.raises(ValueError):
+        check_same_setup([log], clips=["fight_a.avi"], warmup=0)
