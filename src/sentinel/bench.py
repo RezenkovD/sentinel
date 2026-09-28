@@ -318,7 +318,10 @@ def clip_info(path: Path) -> str:
     cap = cv2.VideoCapture(str(path))
     try:
         w, h = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fps, n = cap.get(cv2.CAP_PROP_FPS), int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        n = 0  # count decodable frames: the header's frame count is wrong for truncated files
+        while cap.grab():
+            n += 1
     finally:
         cap.release()
     return f"{path.name}: {w}×{h}, {fps:g} fps, {n / fps:.1f} s" if fps > 0 else f"{path.name}: {w}×{h}"

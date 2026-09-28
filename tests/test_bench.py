@@ -14,6 +14,7 @@ from sentinel.bench import (
     Timing,
     append_paced_row,
     append_row,
+    clip_info,
     render_table,
     run_measurement,
     run_paced,
@@ -164,3 +165,12 @@ def test_paced_rows_survive_the_jsonl_log(tmp_path: Path):
     assert append_paced_row(tmp_path / "paced.jsonl", row) == [row]
     assert row.result.effective_fps == pytest.approx(187 / 18.9)
     assert row.result.skipped_share == pytest.approx(1 - 187 / 564)
+
+
+def test_clip_info_reports_decodable_duration_of_a_truncated_file(tmp_path: Path):
+    video = make_video(tmp_path / "clip.avi", n_frames=30)  # header: 30 frames = 1 s
+    data = video.read_bytes()
+    video.write_bytes(data[: len(data) // 2])  # a partially downloaded file keeps its full-length header
+    info = clip_info(video)
+    assert info.startswith("clip.avi: 64×48, 30 fps, ")
+    assert not info.endswith("1.0 s")
