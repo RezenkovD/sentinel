@@ -64,9 +64,15 @@ class BenchRow:
         """Analysis rate reachable if frames are processed back to back."""
         return 1000.0 / self.measurement.total.mean_ms
 
-    def model_rtf(self, fps: float) -> float:
-        """RTF from model time alone (no decoding): fps × mean ms per frame."""
-        return fps * self.measurement.total.mean_ms / 1000.0
+
+def _warm_up(
+    source: Path, tracker: Tracker, poser: Poser, frames: int, after: Callable[[], None] | None
+) -> None:
+    with LatestFrameReader(source, mode="offline") as reader:
+        for _, frame in zip(range(frames), reader, strict=False):
+            poser.estimate(frame.image, tracker.update(frame.image))
+    if after is not None:
+        after()
 
 
 def run_measurement(
@@ -78,12 +84,7 @@ def run_measurement(
     clock: Callable[[], float] = time.perf_counter,
     after_warmup: Callable[[], None] | None = None,
 ) -> Measurement:
-    with LatestFrameReader(sources[0], mode="offline") as reader:
-        for _, frame in zip(range(warmup), reader, strict=False):
-            poser.estimate(frame.image, tracker.update(frame.image))
-    if after_warmup is not None:
-        after_warmup()
-
+    _warm_up(sources[0], tracker, poser, warmup, after_warmup)
     det_ms: list[float] = []
     pose_ms: list[float] = []
     n_tracks = n_skeletons = 0
@@ -118,6 +119,64 @@ def run_measurement(
     )
 
 
+@dataclass(frozen=True)
+class PacedResult:
+    """Real-time run: clips played at their own speed, analysis limited to target_fps (SPEC, section 6)."""
+
+    target_fps: float
+    delivered: int  # analysed frames
+    received: int  # frames the reader got from the source
+    wall_s: float
+    duration_s: float  # video duration
+    latency: Timing  # from the frame's appearance to the end of its analysis
+
+    @property
+    def effective_fps(self) -> float:
+        return self.delivered / self.wall_s
+
+    @property
+    def skipped_share(self) -> float:
+        return 1.0 - self.delivered / self.received
+
+
+@dataclass(frozen=True)
+class PacedRow:
+    model: str
+    backend: str
+    device: str
+    imgsz: int
+    threads: int | None
+    result: PacedResult
+    clips: list[str] = field(default_factory=list)
+
+
+def run_paced(
+    sources: Sequence[Path],
+    tracker: Tracker,
+    poser: Poser,
+    fps: float,
+    warmup: int,
+    after_warmup: Callable[[], None] | None = None,
+) -> PacedResult:
+    _warm_up(sources[0], tracker, poser, warmup, after_warmup)
+    delivered = received = 0
+    wall = duration = 0.0
+    latency_ms: list[float] = []
+    for source in sources:
+        tracker.reset()
+        with LatestFrameReader(source, mode="paced", target_fps=fps) as reader:
+            started = time.monotonic()  # the reader starts its clock on the first read, right below
+            for frame in reader:
+                poser.estimate(frame.image, tracker.update(frame.image))
+                latency_ms.append((time.monotonic() - started - frame.t) * 1000)
+            wall += time.monotonic() - started
+            stats = reader.stats
+            delivered += stats.delivered
+            received += stats.received
+            duration += stats.received / reader.source_fps
+    return PacedResult(fps, delivered, received, wall, duration, timing(latency_ms))
+
+
 def render_table(rows: Sequence[BenchRow]) -> str:
     fps_keys = sorted({fps for row in rows for fps in row.measurement.rtf})
     header = (
@@ -133,7 +192,7 @@ def render_table(rows: Sequence[BenchRow]) -> str:
             "max fps",
         ]
         + [f"RTF@{fps:g}" for fps in fps_keys]
-        + [f"model RTF@{'/'.join(f'{fps:g}' for fps in fps_keys)}", "pose coverage", "frames"]
+        + ["pose coverage", "frames"]
     )
     lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
     for row in rows:
@@ -149,12 +208,62 @@ def render_table(rows: Sequence[BenchRow]) -> str:
             f"{m.total.mean_ms:.1f} / {m.total.p95_ms:.1f}",
             f"{row.max_fps:.1f}",
             *[f"{m.rtf[fps]:.2f}" if fps in m.rtf else "—" for fps in fps_keys],
-            " / ".join(f"{row.model_rtf(fps):.2f}" for fps in fps_keys),
             f"{m.pose_coverage:.0%}",
             str(m.frames),
         ]
         lines.append("| " + " | ".join(cells) + " |")
     return "\n".join(lines)
+
+
+def render_paced_table(rows: Sequence[PacedRow]) -> str:
+    header = [
+        "model",
+        "backend",
+        "imgsz",
+        "threads",
+        "target fps",
+        "effective fps",
+        "analysed / received",
+        "skipped",
+        "latency, ms",
+        "wall / video, s",
+    ]
+    lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
+    for row in rows:
+        r = row.result
+        cells = [
+            row.model,
+            row.backend,
+            str(row.imgsz),
+            "—" if row.threads is None else str(row.threads),
+            f"{r.target_fps:g}",
+            f"{r.effective_fps:.1f}",
+            f"{r.delivered} / {r.received}",
+            f"{r.skipped_share:.0%}",
+            f"{r.latency.mean_ms:.0f} / {r.latency.p95_ms:.0f}",
+            f"{r.wall_s:.1f} / {r.duration_s:.1f}",
+        ]
+        lines.append("| " + " | ".join(cells) + " |")
+    return "\n".join(lines)
+
+
+def paced_row_from_json(data: dict) -> PacedRow:
+    r = data.pop("result")
+    latency = Timing(**r.pop("latency"))
+    return PacedRow(result=PacedResult(latency=latency, **r), **data)
+
+
+def _append_jsonl(jsonl: Path, row: BenchRow | PacedRow) -> list[dict]:
+    jsonl.parent.mkdir(parents=True, exist_ok=True)
+    with jsonl.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(asdict(row), ensure_ascii=False) + "\n")
+    return _read_jsonl(jsonl)
+
+
+def _read_jsonl(jsonl: Path) -> list[dict]:
+    if not jsonl.exists():
+        return []
+    return [json.loads(line) for line in jsonl.read_text(encoding="utf-8").splitlines()]
 
 
 def row_from_json(data: dict) -> BenchRow:
@@ -172,10 +281,12 @@ def row_from_json(data: dict) -> BenchRow:
 
 def append_row(jsonl: Path, row: BenchRow) -> list[BenchRow]:
     """Append a row to the JSONL log and return every row logged so far."""
-    jsonl.parent.mkdir(parents=True, exist_ok=True)
-    with jsonl.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(asdict(row), ensure_ascii=False) + "\n")
-    return [row_from_json(json.loads(line)) for line in jsonl.read_text(encoding="utf-8").splitlines()]
+    return [row_from_json(d) for d in _append_jsonl(jsonl, row)]
+
+
+def append_paced_row(jsonl: Path, row: PacedRow) -> list[PacedRow]:
+    """Append a real-time row to its JSONL log and return every row logged so far."""
+    return [paced_row_from_json(d) for d in _append_jsonl(jsonl, row)]
 
 
 def environment_notes() -> list[str]:
@@ -213,29 +324,42 @@ def clip_info(path: Path) -> str:
     return f"{path.name}: {w}×{h}, {fps:g} fps, {n / fps:.1f} s" if fps > 0 else f"{path.name}: {w}×{h}"
 
 
-def render_report(rows: Sequence[BenchRow], sources: Sequence[Path], warmup: int) -> str:
-    return "\n".join(
-        [
-            f"# Bench {time.strftime('%Y-%m-%d')}",
+def render_report(
+    rows: Sequence[BenchRow], paced: Sequence[PacedRow], sources: Sequence[Path], warmup: int
+) -> str:
+    lines = [
+        f"# Bench {time.strftime('%Y-%m-%d')}",
+        "",
+        "Середовище: " + "; ".join(environment_notes()) + ".",
+        "",
+        "Кліпи останнього прогону:",
+        *[f"- {clip_info(s)}" for s in sources],
+        "",
+        f"Прогрів: перші {warmup} кадрів (окремий прохід, у заміри не входить).",
+        "",
+        "## Швидкість моделей (offline)",
+        "",
+        "Кліпи читаються в режимі `offline` з вибіркою кадрів на сітці частоти аналізу. "
+        "Час — мс/кадр, `середнє / p95`. `max fps` = 1000 / середній total. "
+        "`RTF@f` — виміряний: весь час обробки кліпу (декодування всіх кадрів джерела + аналіз вибраних) "
+        "/ тривалість відео. `pose coverage` — частка треків людей, до яких прив'язано скелет.",
+        "",
+        render_table(rows),
+        "",
+    ]
+    if paced:
+        lines += [
+            "## Реальний час (paced)",
             "",
-            "Середовище: " + "; ".join(environment_notes()) + ".",
+            "Кліпи відтворюються з власною швидкістю, як жива камера; читач тримає лише найсвіжіший кадр, "
+            "аналіз — не частіше за `target fps`. `effective fps` — проаналізовано кадрів за секунду; "
+            "`skipped` — частка кадрів джерела, що не аналізувалися; `latency` — від появи кадру до кінця "
+            "його аналізу, мс (`середнє / p95`).",
             "",
-            "Кліпи останнього прогону:",
-            *[f"- {clip_info(s)}" for s in sources],
-            "",
-            f"Прогрів: перші {warmup} кадрів (окремий прохід, у заміри не входить). "
-            "Кліпи читаються в режимі `offline` з вибіркою кадрів на сітці частоти аналізу. "
-            "Час — мс/кадр, `середнє / p95`.",
-            "`max fps` = 1000 / середній total. "
-            "`RTF@f` — виміряний: весь час обробки кліпу (декодування всіх кадрів джерела + аналіз вибраних) "
-            "/ тривалість відео. "
-            "`model RTF` = f × середній total / 1000 (лише моделі, без декодування). "
-            "`pose coverage` — частка треків людей, до яких прив'язано скелет.",
-            "",
-            render_table(rows),
+            render_paced_table(paced),
             "",
         ]
-    )
+    return "\n".join(lines)
 
 
 def export_openvino(weights: Path) -> Path:
@@ -263,6 +387,7 @@ def run_bench(
     pose_conf: float,
     min_iou: float,
     out: Path,
+    paced: bool = False,
 ) -> Path:
     import torch
 
@@ -282,16 +407,28 @@ def run_bench(
         if backend == "torch" and threads is not None:
             torch.set_num_threads(threads)
 
-    jsonl = out.with_suffix(".jsonl")
+    def threads_used() -> int | None:
+        return torch.get_num_threads() if backend == "torch" else None
+
+    jsonl, paced_jsonl = out.with_suffix(".jsonl"), out.with_suffix(".paced.jsonl")
+    clips = [s.name for s in sources]
     for imgsz in imgsz_list:
-        tracker = PersonTracker(
-            det_weights, imgsz=imgsz, conf=person_conf, tracker=tracker_cfg, device=device
-        )
-        poser = PoseEstimator(pose_weights, imgsz=imgsz, conf=pose_conf, min_iou=min_iou, device=device)
-        m = run_measurement(sources, tracker, poser, fps_list, warmup, after_warmup=after_warmup)
-        threads_used = torch.get_num_threads() if backend == "torch" else None
-        row = BenchRow(model, backend, device, imgsz, threads_used, m, clips=[s.name for s in sources])
-        rows = append_row(jsonl, row)
-        out.write_text(render_report(rows, sources, warmup), encoding="utf-8")
-        print(render_table([row]), flush=True)
+        for paced_fps in fps_list if paced else [None]:
+            tracker = PersonTracker(
+                det_weights, imgsz=imgsz, conf=person_conf, tracker=tracker_cfg, device=device
+            )
+            poser = PoseEstimator(pose_weights, imgsz=imgsz, conf=pose_conf, min_iou=min_iou, device=device)
+            if paced_fps is None:
+                m = run_measurement(sources, tracker, poser, fps_list, warmup, after_warmup=after_warmup)
+                row = BenchRow(model, backend, device, imgsz, threads_used(), m, clips)
+                append_row(jsonl, row)
+                print(render_table([row]), flush=True)
+            else:
+                r = run_paced(sources, tracker, poser, paced_fps, warmup, after_warmup=after_warmup)
+                paced_row = PacedRow(model, backend, device, imgsz, threads_used(), r, clips)
+                append_paced_row(paced_jsonl, paced_row)
+                print(render_paced_table([paced_row]), flush=True)
+            rows = [row_from_json(d) for d in _read_jsonl(jsonl)]
+            paced_rows = [paced_row_from_json(d) for d in _read_jsonl(paced_jsonl)]
+            out.write_text(render_report(rows, paced_rows, sources, warmup), encoding="utf-8")
     return out

@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 
 import numpy as np
@@ -8,10 +9,14 @@ from sentinel.agents.detector import Track
 from sentinel.bench import (
     BenchRow,
     Measurement,
+    PacedResult,
+    PacedRow,
     Timing,
+    append_paced_row,
     append_row,
     render_table,
     run_measurement,
+    run_paced,
     timing,
 )
 
@@ -56,11 +61,8 @@ def test_timing_mean_and_p95():
     assert timing([10.0, 20.0, 30.0, 40.0]) == Timing(mean_ms=25.0, p95_ms=38.5)
 
 
-def test_rates_derived_from_mean_total_time():
-    row = _row(total=Timing(50.0, 60.0))
-    assert row.max_fps == pytest.approx(20.0)
-    assert row.model_rtf(8) == pytest.approx(0.4)
-    assert row.model_rtf(10) == pytest.approx(0.5)
+def test_max_analysis_rate_from_mean_total_time():
+    assert _row(total=Timing(50.0, 60.0)).max_fps == pytest.approx(20.0)
 
 
 def test_measurement_excludes_warmup_and_times_each_stage(tmp_path: Path):
@@ -96,7 +98,6 @@ def test_table_row_puts_each_value_in_its_column():
         "14.3",
         "0.61",
         "0.77",
-        "0.56 / 0.70",
         "85%",
         "120",
     ]
@@ -116,3 +117,50 @@ def test_rows_survive_the_jsonl_log_across_runs(tmp_path: Path):
     first, second = _row(), _row(total=Timing(20.0, 25.0))
     append_row(log, first)
     assert append_row(log, second) == [first, second]
+
+
+class SleepyAgents:
+    """Real-time stand-in for both models: every analysed frame costs `cost_s` of wall time."""
+
+    def __init__(self, cost_s: float) -> None:
+        self.cost_s = cost_s
+
+    def update(self, image: np.ndarray) -> list[Track]:
+        time.sleep(self.cost_s)
+        return [Track(1, (0, 0, 10, 20), 0.9)]
+
+    def reset(self) -> None:
+        pass
+
+    def estimate(self, image: np.ndarray, tracks: list[Track]) -> dict[int, np.ndarray]:
+        return {}
+
+
+def test_paced_run_analyses_at_the_target_rate(tmp_path: Path):
+    video = make_video(tmp_path / "clip.avi", n_frames=60)  # 2 s at 30 fps
+    agents = SleepyAgents(cost_s=0.005)
+    r = run_paced([video], agents, agents, fps=10, warmup=0)
+    assert r.received == 60
+    assert 17 <= r.delivered <= 21
+    assert 8.5 <= r.effective_fps <= 10.5
+    assert r.wall_s == pytest.approx(2.0, abs=0.3)
+
+
+def test_paced_run_with_slow_analysis_drops_frames_but_lag_stays_bounded(tmp_path: Path):
+    video = make_video(tmp_path / "clip.avi", n_frames=60)  # 2 s at 30 fps
+    agents = SleepyAgents(cost_s=0.25)  # 4 frames/s at best, far below the 10 fps target
+    r = run_paced([video], agents, agents, fps=10, warmup=0)
+    # A frame queue would end ~13 s behind (60 frames × 0.25 s); the latest-frame reader lags one step.
+    assert r.latency.p95_ms < 600
+    assert r.delivered <= 10
+    assert r.skipped_share >= 0.8
+
+
+def test_paced_rows_survive_the_jsonl_log(tmp_path: Path):
+    result = PacedResult(
+        10.0, delivered=187, received=564, wall_s=18.9, duration_s=18.8, latency=Timing(52.0, 71.0)
+    )
+    row = PacedRow("yolo26n", "torch", "cpu", 480, 8, result, clips=["a.avi"])
+    assert append_paced_row(tmp_path / "paced.jsonl", row) == [row]
+    assert row.result.effective_fps == pytest.approx(187 / 18.9)
+    assert row.result.skipped_share == pytest.approx(1 - 187 / 564)

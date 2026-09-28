@@ -30,6 +30,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     bench.add_argument("--warmup", type=int, help="default: bench.warmup_frames from config")
     bench.add_argument("--out", type=Path, help="markdown report; default: results/bench_<date>.md")
+    bench.add_argument("--paced", action="store_true", help="real-time run: clips play at their own speed")
     return parser
 
 
@@ -55,6 +56,7 @@ def main(argv: list[str] | None = None) -> int:
             pose_conf=config.models.pose.conf,
             min_iou=config.models.pose.min_iou,
             out=args.out or Path("results") / f"bench_{date.today().isoformat()}.md",
+            paced=args.paced,
         )
         print(f"report: {out}")
         return 0
