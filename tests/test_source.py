@@ -1,23 +1,17 @@
 import time
 from pathlib import Path
 
-import cv2
 import numpy as np
 import pytest
+from conftest import GRAY_STEP, make_video
 
 from sentinel.io.source import LatestFrameReader
 
 SRC_FPS = 30
-GRAY_STEP = 8  # frame i is a flat gray image of value i * GRAY_STEP, so the index survives MJPG compression
 
 
-def _make_video(path: Path, n_frames: int, fps: int = SRC_FPS) -> Path:
-    writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"MJPG"), fps, (64, 48))
-    assert writer.isOpened()
-    for i in range(n_frames):
-        writer.write(np.full((48, 64, 3), i * GRAY_STEP, dtype=np.uint8))
-    writer.release()
-    return path
+def _make_video(path: Path, n_frames: int) -> Path:
+    return make_video(path, n_frames, fps=SRC_FPS)
 
 
 def _index_in_pixels(image: np.ndarray) -> int:
