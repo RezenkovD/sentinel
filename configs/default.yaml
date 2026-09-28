@@ -1,0 +1,27 @@
+# Runtime configuration. Thresholds, rates and input sizes live here, not in code (CLAUDE.md).
+
+source:
+  mode: live              # live (camera / RTSP) | paced (file at real speed) | offline (file, no pauses)
+  camera_id: cam-1        # goes into window.source of the scene description
+
+analysis:
+  fps: 10                 # fixed analysis rate, frames/s (not the camera rate); SPEC §6: 8–10
+  window_s: 1.0           # one scene description per window
+
+models:
+  device: cpu
+  imgsz: 640              # detector / pose input size; bench compares 640 / 480 / 416
+  threads: null           # torch intra-op threads; null = leave the Ultralytics default (8)
+  person:
+    weights: weights/yolo11n.pt
+    conf: 0.25
+    tracker: bytetrack.yaml
+  pose:
+    weights: weights/yolo11n-pose.pt
+    conf: 0.25
+    min_iou: 0.3          # a pose box is attached to the person track it overlaps most (IoU ≥ min_iou)
+
+bench:
+  imgsz: [640, 480, 416]
+  fps: [8, 10]
+  warmup_frames: 10       # excluded from timings

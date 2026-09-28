@@ -1,0 +1,17 @@
+# Data and artifacts live outside git (see CLAUDE.md)
+data/raw/
+data/episodes/
+weights/
+results/
+cache/
+.env
+.venv/
+*.pt
+*_openvino_model/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/

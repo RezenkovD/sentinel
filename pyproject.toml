@@ -1,0 +1,51 @@
+[project]
+name = "sentinel"
+version = "0.1.0"
+description = "Multi-agent situational danger assessment for CCTV video: weapons and aggression"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "ultralytics",
+    "pydantic",
+    "scikit-learn",
+    "python-dotenv",
+    # Pulled in by ultralytics anyway; listed explicitly only to pin them to the CPU-only index below.
+    "torch",
+    "torchvision",
+]
+
+[project.scripts]
+sentinel = "sentinel.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[build-system]
+requires = ["uv_build>=0.12,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv]
+# The system runs on Linux only (Ubuntu laptop + Docker); a Linux-only lock keeps resolution simple.
+environments = ["sys_platform == 'linux'"]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
