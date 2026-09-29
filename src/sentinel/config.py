@@ -65,6 +65,34 @@ class ContextConfig(_Section):
     zones: Path
 
 
+class ZonePriorConfig(_Section):
+    hours: dict[str, float]
+    density: dict[str, float]
+    type: dict[str, float]
+
+
+class AggregatorAConfig(_Section):
+    bias: float
+    clip: float = Field(gt=0)
+    weights: dict[str, float]
+    scale: dict[str, float]
+    neutral: dict[str, float]
+    zone_prior: ZonePriorConfig
+
+
+class IncidentsConfig(_Section):
+    theta_high: float = Field(gt=0, le=1)
+    theta_low: float = Field(ge=0, lt=1)
+    k: int = Field(ge=1)
+    n: int = Field(ge=1)
+    quiet_s: float = Field(ge=0)
+    merge_after_close_s: float = Field(ge=0)
+    max_new_per_minute: int = Field(ge=1)
+    weapon_override_margin: float = Field(ge=0)
+    blur_faces: bool
+    output_dir: Path
+
+
 class BenchConfig(_Section):
     imgsz: list[int]
     fps: list[float]
@@ -77,6 +105,8 @@ class Config(_Section):
     models: ModelsConfig
     features: FeaturesConfig
     context: ContextConfig
+    aggregator_a: AggregatorAConfig
+    incidents: IncidentsConfig
     bench: BenchConfig
 
 

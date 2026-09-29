@@ -37,6 +37,70 @@ features:                 # person and pair features over a window (SPEC §4–5
 context:
   zones: configs/zones.yaml
 
+aggregator_a:               # A v0 — hand-set weights (training comes after the episodes are built)
+  # risk = sigmoid(bias + Σ weights[f] · clip((x_f − mean_f) / scale[f], ±clip)); mean = 0 for hand-set weights.
+  # A null feature takes its `neutral` value; explanations rank contributions against the neutral scene.
+  bias: -2.5
+  clip: 5.0
+  weights:
+    n_persons: 0.1
+    crowd_motion: 0.3
+    max_speed: 0.3
+    max_limb_accel: 1.2
+    min_distance_h: -1.0
+    max_approach_speed: 0.6
+    facing_close: 0.5
+    max_contact_s: 0.6
+    n_close_pairs: 0.3
+    weapon_visible: 0.8
+    weapon_held: 2.0
+    zone_prior: 1.0
+    limb_accel_missing: 0.0
+  scale:                    # typical magnitude of each feature, in its own units
+    n_persons: 5.0
+    crowd_motion: 1.0       # heights/s
+    max_speed: 2.0          # heights/s
+    max_limb_accel: 20.0    # heights/s²
+    min_distance_h: 2.0     # heights
+    max_approach_speed: 2.0 # heights/s
+    facing_close: 1.0
+    max_contact_s: 5.0      # s
+    n_close_pairs: 3.0
+    weapon_visible: 1.0
+    weapon_held: 1.0
+    zone_prior: 1.0
+    limb_accel_missing: 1.0
+  neutral:                  # value of a missing feature = a calm scene
+    n_persons: 0.0
+    crowd_motion: 0.0
+    max_speed: 0.0
+    max_limb_accel: 0.0
+    min_distance_h: 2.0     # nobody within the pair limit
+    max_approach_speed: 0.0
+    facing_close: 0.0
+    max_contact_s: 0.0
+    n_close_pairs: 0.0
+    weapon_visible: 0.0
+    weapon_held: 0.0
+    zone_prior: 0.0
+    limb_accel_missing: 0.0
+  zone_prior:               # added up: hours + expected density + zone type
+    hours: {day: 0.0, night: 0.5}
+    density: {low: 0.2, medium: 0.0, high: 0.0}
+    type: {}
+
+incidents:                  # incident state machine (SPEC §7)
+  theta_high: 0.6           # risk that opens / keeps an alarm
+  theta_low: 0.4            # risk below which things calm down (hysteresis)
+  k: 3                      # ATTENTION -> ALARM: risk >= theta_high in k of the last n windows
+  n: 5
+  quiet_s: 10.0             # COOLDOWN -> NORMAL after this long below theta_low (M)
+  merge_after_close_s: 30.0 # a new incident this soon after the previous one closed joins it
+  max_new_per_minute: 6     # more new incidents per minute are folded into one summary
+  weapon_override_margin: 0.1  # weapon in hand -> risk >= theta_high + margin
+  blur_faces: true
+  output_dir: results/incidents
+
 bench:
   imgsz: [640, 480, 416]
   fps: [8, 10]

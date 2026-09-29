@@ -1,1 +1,197 @@
-"""Aggregator A: logistic regression over scene features plus the "weapon in hand" override rule."""
+"""Aggregator A: logistic model over scene features plus the "weapon in hand" override rule (SPEC §3–4).
+
+`scene_to_features` is the only way from a scene description to A's inputs: a fixed order of named features.
+A null feature takes its neutral value from the config (a calm scene); for the wrist acceleration an extra
+indicator says the value was missing, because "no data about the hands" is not the same as "calm hands".
+
+v0 uses hand-set weights from the config. The same object is ready for a fitted logistic regression
+(`fit` / `save` / `load`): features are standardised as z = clip((x − mean) / scale, ±clip) and
+risk = sigmoid(bias + w · z); hand-set weights use mean = 0 and the configured scale.
+"""
+
+import json
+from pathlib import Path
+
+import numpy as np
+
+from sentinel.config import Config
+from sentinel.schema import RiskResult, SceneDescription
+
+FEATURE_NAMES = (
+    "n_persons",
+    "crowd_motion",
+    "max_speed",
+    "max_limb_accel",
+    "min_distance_h",
+    "max_approach_speed",
+    "facing_close",
+    "max_contact_s",
+    "n_close_pairs",
+    "weapon_visible",
+    "weapon_held",
+    "zone_prior",
+    "limb_accel_missing",
+)
+_WEAPON_UK = {"gun": "вогнепальна зброя", "knife": "ніж"}
+
+
+def _num(value: float) -> str:
+    return f"{value:.1f}".replace(".", ",")
+
+
+def scene_to_features(scene: SceneDescription, config: Config) -> np.ndarray:
+    neutral = config.aggregator_a.neutral
+    contact = config.features.contact_distance_h
+    persons, pairs = scene.persons, scene.interactions
+
+    def worst(values: list[float | None], name: str, pick=max) -> float:
+        known = [v for v in values if v is not None]
+        return float(pick(known)) if known else neutral[name]
+
+    close = [i for i in pairs if i.distance_h < contact]
+    prior = config.aggregator_a.zone_prior
+    zone = scene.zone
+    x = {
+        "n_persons": float(scene.summary.n_persons),
+        "crowd_motion": neutral["crowd_motion"]
+        if scene.summary.crowd_motion is None
+        else scene.summary.crowd_motion,
+        "max_speed": worst([p.speed for p in persons], "max_speed"),
+        "max_limb_accel": worst([p.limb_accel for p in persons], "max_limb_accel"),
+        "min_distance_h": worst([i.distance_h for i in pairs], "min_distance_h", pick=min),
+        "max_approach_speed": worst([i.approach_speed for i in pairs], "max_approach_speed"),
+        "facing_close": float(any(i.facing is True for i in close)),
+        "max_contact_s": worst([i.duration_s for i in pairs], "max_contact_s"),
+        "n_close_pairs": float(len(close)),
+        "weapon_visible": float(scene.summary.weapon_visible),
+        "weapon_held": float(any(p.holds is not None for p in persons)),
+        "zone_prior": prior.hours.get(zone.hours, 0.0)
+        + prior.density.get(zone.expected_density, 0.0)
+        + prior.type.get(zone.type, 0.0),
+        "limb_accel_missing": float(bool(persons) and all(p.limb_accel is None for p in persons)),
+    }
+    return np.array([x[name] for name in FEATURE_NAMES], dtype=float)
+
+
+def _reason(name: str, x: dict[str, float], scene: SceneDescription) -> str | None:
+    if name == "max_limb_accel":
+        return "різкі рухи рук"
+    if name == "min_distance_h":
+        return f"двоє людей зблизилися до {_num(x[name])} зросту"
+    if name == "max_approach_speed":
+        return f"швидке зближення ({_num(x[name])} зросту/с)"
+    if name == "facing_close":
+        return "люди впритул обличчям одне до одного"
+    if name == "max_contact_s":
+        return f"тривалий близький контакт ({_num(x[name])} с)"
+    if name == "n_close_pairs":
+        return f"кілька пар упритул ({int(x[name])})"
+    if name == "weapon_held":
+        kinds = sorted({p.holds for p in scene.persons if p.holds})
+        return "зброя в руці: " + ", ".join(_WEAPON_UK[k] for k in kinds)
+    if name == "weapon_visible":
+        return "у кадрі видно зброю"
+    if name in ("crowd_motion", "max_speed"):
+        return f"швидкий рух ({_num(x[name])} зросту/с)"
+    if name == "n_persons":
+        return f"багато людей ({int(x[name])})"
+    if name == "zone_prior":
+        return "зона або час підвищеного ризику"
+    return None
+
+
+class RulesAggregator:
+    def __init__(
+        self,
+        weights: np.ndarray,
+        bias: float,
+        mean: np.ndarray,
+        scale: np.ndarray,
+        clip: float,
+        config: Config,
+    ) -> None:
+        self.weights, self.bias, self.mean, self.scale, self.clip = weights, bias, mean, scale, clip
+        self.config = config
+        self._neutral_z = self._standardise(np.array([config.aggregator_a.neutral[n] for n in FEATURE_NAMES]))
+
+    @classmethod
+    def from_config(cls, config: Config) -> "RulesAggregator":
+        a = config.aggregator_a
+        for table in (a.weights, a.scale, a.neutral):
+            if set(table) != set(FEATURE_NAMES):
+                raise ValueError(
+                    f"aggregator_a tables must list exactly {FEATURE_NAMES}, got {sorted(table)}"
+                )
+        weights = np.array([a.weights[n] for n in FEATURE_NAMES])
+        scale = np.array([a.scale[n] for n in FEATURE_NAMES])
+        return cls(weights, a.bias, np.zeros(len(FEATURE_NAMES)), scale, a.clip, config)
+
+    def _standardise(self, x: np.ndarray) -> np.ndarray:
+        return np.clip((x - self.mean) / self.scale, -self.clip, self.clip)
+
+    def assess(self, scene: SceneDescription) -> RiskResult:
+        thresholds = self.config.incidents
+        if scene.summary.n_persons == 0:
+            return RiskResult(risk=0.0, level="normal", reason_uk="У кадрі нікого немає")
+        x = scene_to_features(scene, self.config)
+        z = self._standardise(x)
+        risk = float(1.0 / (1.0 + np.exp(-(self.bias + self.weights @ z))))
+        named = dict(zip(FEATURE_NAMES, x, strict=True))
+        if named["weapon_held"]:
+            risk = max(risk, min(1.0, thresholds.theta_high + thresholds.weapon_override_margin))
+        level = (
+            "alarm"
+            if risk >= thresholds.theta_high
+            else "attention"
+            if risk >= thresholds.theta_low
+            else "normal"
+        )
+        return RiskResult(risk=risk, level=level, reason_uk=self._explain(z, named, scene))
+
+    def _explain(self, z: np.ndarray, x: dict[str, float], scene: SceneDescription) -> str:
+        """Two or three largest contributions against the neutral (calm) scene, as Ukrainian phrases."""
+        contributions = self.weights * (z - self._neutral_z)
+        order = np.argsort(-contributions)
+        phrases = []
+        for i in order[:3]:
+            if contributions[i] < 0.1:
+                break
+            if (phrase := _reason(FEATURE_NAMES[i], x, scene)) is not None and phrase not in phrases:
+                phrases.append(phrase)
+        if not phrases:
+            return "Ознак небезпеки немає"
+        text = "; ".join(phrases)
+        return text[0].upper() + text[1:]
+
+    def fit(self, features: np.ndarray, labels: np.ndarray, seed: int = 0) -> None:
+        """Logistic regression on standardised features (train split only)."""
+        from sklearn.linear_model import LogisticRegression
+
+        self.mean = features.mean(axis=0)
+        self.scale = np.where(features.std(axis=0) > 0, features.std(axis=0), 1.0)
+        model = LogisticRegression(random_state=seed, max_iter=1000).fit(self._standardise(features), labels)
+        self.weights, self.bias = model.coef_[0], float(model.intercept_[0])
+        self._neutral_z = self._standardise(
+            np.array([self.config.aggregator_a.neutral[n] for n in FEATURE_NAMES])
+        )
+
+    def save(self, path: Path) -> None:
+        data = {
+            "features": list(FEATURE_NAMES),
+            "weights": self.weights.tolist(),
+            "bias": self.bias,
+            "mean": self.mean.tolist(),
+            "scale": self.scale.tolist(),
+            "clip": self.clip,
+        }
+        Path(path).write_text(json.dumps(data, indent=1), encoding="utf-8")
+
+    @classmethod
+    def load(cls, path: Path, config: Config) -> "RulesAggregator":
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        if tuple(data["features"]) != FEATURE_NAMES:
+            raise ValueError(f"{path} was saved for features {data['features']}, expected {FEATURE_NAMES}")
+        arrays = {k: np.array(data[k], dtype=float) for k in ("weights", "mean", "scale")}
+        return cls(
+            arrays["weights"], float(data["bias"]), arrays["mean"], arrays["scale"], data["clip"], config
+        )

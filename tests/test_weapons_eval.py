@@ -65,3 +65,21 @@ def test_frame_recall_and_false_frame_share_per_threshold():
         (0.55, 0.5, 0.0),
         (0.7, 0.0, 0.0),
     ]
+
+
+def test_person_crop_is_a_padded_square_inside_the_frame():
+    from eval.weapons import person_crop
+
+    # a 100 x 200 person in the middle of a 1920 x 1080 frame, 25 % padding -> 250 px square
+    assert person_crop((900.0, 400.0, 1000.0, 600.0), (1080, 1920), pad=0.25) == (825, 375, 1075, 625)
+    # near the edge the square is shifted inside, not cut
+    assert person_crop((0.0, 900.0, 100.0, 1080.0), (1080, 1920), pad=0.25) == (0, 855, 225, 1080)
+
+
+def test_detections_from_overlapping_crops_are_merged():
+    from eval.weapons import merge_detections
+
+    a = Detection("f", "gun", 0.9, (10.0, 10.0, 30.0, 30.0))
+    b = Detection("f", "gun", 0.6, (11.0, 11.0, 31.0, 31.0))  # same gun seen in a second crop
+    c = Detection("f", "knife", 0.5, (11.0, 11.0, 31.0, 31.0))  # other kind at the same place is kept
+    assert merge_detections([b, a, c], iou_threshold=0.5) == [a, c]
