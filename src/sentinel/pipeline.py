@@ -97,6 +97,7 @@ class Pipeline:
         self.incidents = IncidentManager(cfg.incidents, self.source_id, self.keyframes, run_id)
         self._window = _Window()
         self.windows = 0
+        self.last_timing_ms: dict[str, float] = {}
 
     def process(self, frame: Frame, age_s: float | None = None) -> list[IncidentEvent]:
         timing: dict[str, float] = {}
@@ -113,9 +114,11 @@ class Pipeline:
         scene = self.builder.add(frame.t, tracks, skeletons, weapons)
         timing["scene"] = _ms_since(started)
         events = []
+        started = time.perf_counter()
         if scene is not None:
             events = self._close_window(scene)
             self._window = _Window()  # this frame opens the next window
+        self.last_timing_ms = timing | {"decision": _ms_since(started) if scene is not None else 0.0}
         self._window.add(frame, tracks, skeletons, weapons, timing, age_s)
         return events
 

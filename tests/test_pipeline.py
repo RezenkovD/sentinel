@@ -115,3 +115,20 @@ def test_keyframe_comes_from_a_frame_of_the_window_that_opened_the_incident(tmp_
     frame_index = int(snapshot.image[0, 0, 0])
     assert 20 <= frame_index < 50  # close together from t = 2 s; opened after k of n windows
     assert len(snapshot.tracks) == 2
+
+
+def test_last_frame_stage_times_are_exposed_for_the_bench(tmp_path: Path):
+    people = TwoPeople()
+    people.t = 0.0
+    pipeline = Pipeline(
+        Agents(people=people, poser=NoSkeletons(), weapons=NoWeapons()),
+        CloseMeansDanger(),
+        Collect(),
+        CONFIG,
+        source_id="cam-1",
+        run_id="t",
+        journal=None,
+        keyframes=RecordKeyframes(),
+    )
+    pipeline.process(Frame(image=np.zeros((10, 10, 3), dtype=np.uint8), t=0.0, index=0))
+    assert set(pipeline.last_timing_ms) == {"people", "pose", "weapons", "scene", "decision"}

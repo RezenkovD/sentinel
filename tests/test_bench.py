@@ -226,3 +226,14 @@ def test_power_state_on_battery(tmp_path: Path):
 def test_power_state_unknown_without_mains_adapter_or_profile_tool(tmp_path: Path):
     state = read_power_state(tmp_path / "missing", profile_cmd=["no-such-profile-tool-xyz"])
     assert state == PowerState(source="unknown", profile="unknown")
+
+
+def test_weapon_variants_are_parsed_from_the_command_line():
+    from sentinel.bench import WeaponVariant
+
+    assert WeaponVariant.parse("480:1") == WeaponVariant(mode="frame", imgsz=480, every_n_frames=1)
+    assert WeaponVariant.parse("640:2") == WeaponVariant(mode="frame", imgsz=640, every_n_frames=2)
+    assert WeaponVariant.parse("crops320:2") == WeaponVariant(mode="crops", imgsz=320, every_n_frames=2)
+    assert WeaponVariant.parse("crops320:2").label == "crops320:2"
+    with pytest.raises(ValueError):
+        WeaponVariant.parse("640")

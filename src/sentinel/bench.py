@@ -494,3 +494,145 @@ def run_bench(
             paced_rows = [paced_row_from_json(d) for d in _read_jsonl(paced_jsonl)]
             out.write_text(render_report(rows, paced_rows, sources, warmup), encoding="utf-8")
     return out
+
+
+# --- full pipeline (session 02, step 7) ---
+
+
+@dataclass(frozen=True)
+class WeaponVariant:
+    mode: str  # "frame" or "crops"
+    imgsz: int
+    every_n_frames: int
+
+    @classmethod
+    def parse(cls, text: str) -> "WeaponVariant":
+        """ "480:1", "640:2" (whole frame) or "crops320:2" (person crops): input size : every n-th frame."""
+        size, sep, every = text.partition(":")
+        if not sep or not every.isdigit():
+            raise ValueError(f"weapon variant must look like 640:1 or crops320:2, got {text!r}")
+        mode = "crops" if size.startswith("crops") else "frame"
+        return cls(mode, int(size.removeprefix("crops")), int(every))
+
+    @property
+    def label(self) -> str:
+        return f"{'crops' if self.mode == 'crops' else ''}{self.imgsz}:{self.every_n_frames}"
+
+
+class _NoNotifier:
+    def on_event(self, event: object) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+
+def run_pipeline_bench(
+    config, sources: Sequence[Path], variants: Sequence[WeaponVariant], warmup: int, out: Path
+) -> Path:
+    """Full pipeline per weapon-detector variant: offline RTF + stage times, then a paced pass."""
+    from sentinel.pipeline import build_pipeline
+
+    fps = config.analysis.fps
+    power = read_power_state()
+    rows = []
+    for variant in variants:
+        weapons = config.weapons.model_copy(
+            update={"mode": variant.mode, "imgsz": variant.imgsz, "every_n_frames": variant.every_n_frames}
+        )
+        incidents = config.incidents.model_copy(update={"output_dir": out.parent / f"{out.stem}_keyframes"})
+        cfg = config.model_copy(update={"weapons": weapons, "incidents": incidents})
+        pipeline = build_pipeline(cfg, cfg.source.camera_id, "bench", None, _NoNotifier())
+        with LatestFrameReader(sources[0], mode="offline") as reader:
+            for _, frame in zip(range(warmup), reader, strict=False):
+                pipeline.process(frame)
+        stages: dict[str, list[float]] = {}
+        totals: list[float] = []
+        wall = duration = 0.0
+        for source in sources:  # offline: every frame on the analysis grid, decoding included
+            pipeline.reset(run_id="bench")
+            started = time.perf_counter()
+            with LatestFrameReader(source, mode="offline", target_fps=fps) as reader:
+                for frame in reader:
+                    pipeline.process(frame)
+                    for stage, ms in pipeline.last_timing_ms.items():
+                        stages.setdefault(stage, []).append(ms)
+                    totals.append(sum(pipeline.last_timing_ms.values()))
+                pipeline.finish()
+                wall += time.perf_counter() - started
+                duration += reader.stats.received / reader.source_fps
+        latency: list[float] = []
+        delivered = received = 0
+        paced_wall = 0.0
+        for source in sources:  # paced: like a live camera
+            pipeline.reset(run_id="bench")
+            with LatestFrameReader(source, mode="paced", target_fps=fps) as reader:
+                started = time.monotonic()
+                for frame in reader:
+                    pipeline.process(frame)
+                    latency.append((time.monotonic() - started - frame.t) * 1000)
+                pipeline.finish()
+                paced_wall += time.monotonic() - started
+                delivered += reader.stats.delivered
+                received += reader.stats.received
+        rows.append(
+            {
+                "variant": variant.label,
+                "stages_ms": {k: asdict(timing(v)) for k, v in stages.items()},
+                "total_ms": asdict(timing(totals)),
+                "rtf": wall / duration,
+                "paced": {
+                    "effective_fps": delivered / paced_wall,
+                    "skipped_share": 1 - delivered / received,
+                    "latency_ms": asdict(timing(latency)),
+                },
+                "frames": len(totals),
+            }
+        )
+        print(json.dumps(rows[-1]), flush=True)
+    report = {
+        "power": asdict(power),
+        "fps": fps,
+        "clips": [s.name for s in sources],
+        "warmup": warmup,
+        "rows": rows,
+    }
+    out.with_suffix(".json").write_text(json.dumps(report, indent=1), encoding="utf-8")
+    out.write_text(render_pipeline_report(report, sources), encoding="utf-8")
+    return out
+
+
+def render_pipeline_report(report: dict, sources: Sequence[Path]) -> str:
+    fps = report["fps"]
+    lines = [
+        f"# Bench: повний конвеєр — {time.strftime('%Y-%m-%d')}",
+        "",
+        "Середовище: " + "; ".join(environment_notes()) + f"; живлення: {PowerState(**report['power'])}.",
+        f"Частота аналізу {fps:g} кадрів/с; прогрів {report['warmup']} кадрів; кліпів {len(sources)}:",
+        *[f"- {clip_info(s)}" for s in sources],
+        "",
+        "Конвеєр: люди + трек (YOLO26n) → поза (YOLO26n-pose) → зброя (варіант) → ознаки й опис сцени → "
+        "A → автомат інцидентів. Мс/кадр — `середнє / p95`. `RTF` — offline: весь час обробки "
+        "(з декодуванням) / тривалість відео. Paced — кліпи в темпі камери: ефективна частота, частка "
+        "пропущених кадрів джерела, затримка від появи кадру до кінця його обробки.",
+        "",
+        "| зброя | люди | поза | зброя, мс | сцена | рішення | разом, мс | RTF@"
+        + f"{fps:g}"
+        + " | paced: кадр/с | пропущено | затримка, мс |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
+    ]
+
+    def cell(stages: dict, k: str) -> str:
+        return f"{stages[k]['mean_ms']:.1f} / {stages[k]['p95_ms']:.1f}"
+
+    for row in report["rows"]:
+        s = row["stages_ms"]
+        p = row["paced"]
+        lines.append(
+            f"| {row['variant']} | {cell(s, 'people')} | {cell(s, 'pose')} | {cell(s, 'weapons')} | "
+            f"{cell(s, 'scene')} | {cell(s, 'decision')} | "
+            f"{row['total_ms']['mean_ms']:.1f} / {row['total_ms']['p95_ms']:.1f} | "
+            f"{row['rtf']:.2f} | {p['effective_fps']:.1f} | {p['skipped_share']:.0%} | "
+            f"{p['latency_ms']['mean_ms']:.0f} / {p['latency_ms']['p95_ms']:.0f} |"
+        )
+    return "\n".join(lines) + "\n"

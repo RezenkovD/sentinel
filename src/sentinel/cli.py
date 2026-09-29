@@ -33,6 +33,12 @@ def build_parser() -> argparse.ArgumentParser:
     bench.add_argument("--warmup", type=int, help="default: bench.warmup_frames from config")
     bench.add_argument("--out", type=Path, help="markdown report; default: results/bench_<date>.md")
     bench.add_argument("--paced", action="store_true", help="real-time run: clips play at their own speed")
+    bench.add_argument(
+        "--pipeline",
+        nargs="+",
+        metavar="WEAPONS",
+        help="full pipeline for weapon-detector variants, e.g. 480:1 640:1 640:2 crops320:2",
+    )
     return parser
 
 
@@ -45,6 +51,14 @@ def main(argv: list[str] | None = None) -> int:
         from sentinel.pipeline import run_source
 
         print(json.dumps(run_source(config, args.source, args.paced), ensure_ascii=False))
+        return 0
+    if args.command == "bench" and args.pipeline:
+        from sentinel.bench import WeaponVariant, run_pipeline_bench
+
+        out = args.out or Path("results") / f"bench_pipeline_{date.today().isoformat()}.md"
+        variants = [WeaponVariant.parse(v) for v in args.pipeline]
+        warmup = config.bench.warmup_frames if args.warmup is None else args.warmup
+        print(f"report: {run_pipeline_bench(config, args.source, variants, warmup, out)}")
         return 0
     if args.command == "bench":
         from sentinel.agents.pose_features import MatchRules
