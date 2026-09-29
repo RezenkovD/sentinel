@@ -25,6 +25,18 @@ models:
     keypoint_conf: 0.5    # a keypoint counts as confident from this score
     box_margin: 0.1       # expansion of the track box, share of its width/height per side
 
+features:                 # person and pair features over a window (SPEC §4–5); units: person heights
+  min_keypoint_conf: 0.5  # keypoints below this score are ignored
+  hold_margin_h: 0.1      # "holds": weapon box expanded by this many heights must contain a wrist…
+  hold_min_frames: 2      # …in at least this many frames of the window
+  pair_max_distance_h: 2.0  # only pairs closer than this go into the scene description…
+  max_pairs: 5            # …at most this many, nearest first
+  contact_distance_h: 1.0 # a pair closer than this is in contact (duration_s)
+  facing_min_offset_h: 0.03 # nose-to-shoulder-midpoint horizontal offset that shows which way a person faces
+
+context:
+  zones: configs/zones.yaml
+
 bench:
   imgsz: [640, 480, 416]
   fps: [8, 10]

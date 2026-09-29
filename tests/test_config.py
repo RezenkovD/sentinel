@@ -27,3 +27,16 @@ def test_misspelled_key_is_rejected(tmp_path: Path):
     path.write_text(text)
     with pytest.raises(ValidationError):
         load_config(path)
+
+
+def test_shipped_zone_profiles_are_valid():
+    from sentinel.agents.context import ZoneContext
+
+    config = load_config(DEFAULT)
+    zones = ZoneContext.from_yaml(DEFAULT.parents[1] / config.context.zones)
+    assert zones.zone_for(config.source.camera_id).hours in {"day", "night"}
+
+
+def test_feature_thresholds_come_from_the_config():
+    features = load_config(DEFAULT).features.to_feature_config()
+    assert features.contact_distance_h < features.pair_max_distance_h

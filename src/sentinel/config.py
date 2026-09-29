@@ -6,6 +6,8 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
+from sentinel.agents.features import FeatureConfig
+
 DEFAULT_CONFIG = Path("configs/default.yaml")
 
 
@@ -46,6 +48,23 @@ class ModelsConfig(_Section):
     pose: PoseModelConfig
 
 
+class FeaturesConfig(_Section):
+    min_keypoint_conf: float = Field(ge=0, le=1)
+    hold_margin_h: float = Field(ge=0)
+    hold_min_frames: int = Field(ge=1)
+    pair_max_distance_h: float = Field(gt=0)
+    max_pairs: int = Field(ge=0)
+    contact_distance_h: float = Field(gt=0)
+    facing_min_offset_h: float = Field(ge=0)
+
+    def to_feature_config(self) -> FeatureConfig:
+        return FeatureConfig(**self.model_dump())
+
+
+class ContextConfig(_Section):
+    zones: Path
+
+
 class BenchConfig(_Section):
     imgsz: list[int]
     fps: list[float]
@@ -56,6 +75,8 @@ class Config(_Section):
     source: SourceConfig
     analysis: AnalysisConfig
     models: ModelsConfig
+    features: FeaturesConfig
+    context: ContextConfig
     bench: BenchConfig
 
 

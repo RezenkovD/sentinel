@@ -16,7 +16,7 @@ from sentinel.schema import (
 
 # The example from SPEC, section 5 (plus the schema version the contract requires).
 SPEC_EXAMPLE = {
-    "schema_version": 1,
+    "schema_version": 2,
     "window": {"t_start": 132.0, "t_end": 133.0, "source": "cam-1"},
     "zone": {"type": "transport_stop", "hours": "night", "expected_density": "low"},
     "summary": {"n_persons": 3, "crowd_motion": 0.42, "weapon_visible": False},
@@ -40,19 +40,19 @@ def test_spec_example_round_trips_through_json_unchanged():
     assert json.loads(scene.model_dump_json()) == SPEC_EXAMPLE
 
 
-def test_serialized_scene_carries_schema_version_1():
+def test_serialized_scene_carries_schema_version_2():
     scene = SceneDescription(
         window=Window(t_start=0.0, t_end=1.0, source="cam-1"),
         zone=Zone(type="street", hours="day", expected_density="high"),
         summary=Summary(n_persons=0, crowd_motion=0.0, weapon_visible=False),
     )
-    assert SCHEMA_VERSION == 1
-    assert json.loads(scene.model_dump_json())["schema_version"] == 1
+    assert SCHEMA_VERSION == 2
+    assert json.loads(scene.model_dump_json())["schema_version"] == 2
 
 
 def test_scene_with_other_schema_version_is_rejected():
     with pytest.raises(ValidationError):
-        _scene(schema_version=2)
+        _scene(schema_version=1)  # v1 had no nulls; old descriptions are not silently reinterpreted
 
 
 def test_floats_are_rounded_to_two_decimals():
@@ -96,7 +96,9 @@ def test_scene_cannot_be_modified_after_creation():
 
 
 def test_holds_accepts_only_known_weapon_types():
-    assert Person(id=1, speed=0, limb_accel=0, holds="pistol", conf=0.5).holds == "pistol"
+    assert Person(id=1, speed=0, limb_accel=0, holds="gun", conf=0.5).holds == "gun"
+    with pytest.raises(ValidationError):  # v2: pistols and rifles are both "gun"
+        Person(id=1, speed=0, limb_accel=0, holds="pistol", conf=0.5)
     with pytest.raises(ValidationError):
         Person(id=1, speed=0, limb_accel=0, holds="umbrella", conf=0.5)
 
@@ -139,3 +141,18 @@ def test_risk_result_parses_strict_llm_json():
 def test_risk_result_rejects_out_of_range_risk_or_unknown_level(bad):
     with pytest.raises(ValidationError):
         RiskResult.model_validate(bad | {"reason_uk": "—"})
+
+
+def test_features_that_could_not_be_computed_are_null_not_zero():
+    # e.g. a person without a skeleton, a track seen in one frame only, a pair without nose/shoulder points
+    person = Person(id=3, speed=None, limb_accel=None, holds=None, conf=0.7)
+    pair = Interaction(pair=(3, 4), distance_h=0.8, approach_speed=None, facing=None, duration_s=0.0)
+    summary = Summary(n_persons=2, crowd_motion=None, weapon_visible=False)
+    assert '"speed":null' in person.model_dump_json() and '"limb_accel":null' in person.model_dump_json()
+    assert '"approach_speed":null' in pair.model_dump_json() and '"facing":null' in pair.model_dump_json()
+    assert summary.crowd_motion is None
+
+
+def test_null_features_still_reject_nan():
+    with pytest.raises(ValidationError):
+        Person(id=3, speed=float("nan"), limb_accel=None, holds=None, conf=0.7)

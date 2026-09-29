@@ -1,0 +1,9 @@
+# Static zone profiles for the context agent (SPEC §4): one zone per source, unknown sources get "default".
+zones:
+  default:
+    type: public_space
+    hours: day              # day | night | auto (from the local clock and day_hours)
+    day_hours: [7, 22]
+    expected_density: medium
+
+sources: {}                 # camera id -> zone name, e.g. {cam-1: default}
