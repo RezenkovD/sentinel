@@ -21,6 +21,7 @@ def _event(kind: str, t: float = 12.0, keyframe: Path | None = None, **extra) ->
         "level": "normal" if kind == "close" else "alarm",
         "max_risk": 0.82,
         "participants": (1, 2),
+        "people": 2,
         "reason_uk": "Двоє людей зблизилися до 0,4 зросту; різкі рухи рук",
         "keyframe": keyframe,
         "started_at": 3.0,

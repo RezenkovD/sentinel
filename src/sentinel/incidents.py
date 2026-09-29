@@ -40,7 +40,7 @@ class IncidentEvent:
     t: float
     level: str
     max_risk: float
-    participants: tuple[int, ...]
+    participants: tuple[int, ...]  # every track id involved (for joining incidents)
     reason_uk: str
     keyframe: Path | None
     started_at: float
@@ -48,6 +48,7 @@ class IncidentEvent:
     merged: bool = False  # the incident was re-opened by a new alarm (joined, not a new incident)
     suppressed: int = 0  # summary: incidents folded in during the current minute
     stream_ended: bool = False  # closed because the video / camera stream ended, not by calm
+    people: int = 0  # most people involved at once (track ids pile up when the tracker renumbers)
 
 
 @dataclass
@@ -60,6 +61,7 @@ class Incident:
     keyframe: Path | None
     weapon: bool
     last_update: float
+    people: int = 0
     suppressed: bool = False
     closed_at: float | None = None
     escalations: int = 0
@@ -154,6 +156,7 @@ class IncidentManager:
             last.closed_at = None
             last.reopenings += 1
             last.participants |= people
+            last.people = max(last.people, len(people))
             last.weapon = last.weapon or held
             self._raise_max(last, risk)
             last.last_update = t
@@ -176,6 +179,7 @@ class IncidentManager:
             keyframe=None,
             weapon=held,
             last_update=t,
+            people=len(people),
         )
         self._incident = incident
         while self._opens and t - self._opens[0] > 60.0:
@@ -192,7 +196,9 @@ class IncidentManager:
     ) -> list[IncidentEvent]:
         incident = self._incident
         assert incident is not None
-        incident.participants |= participants(scene)
+        involved = participants(scene)
+        incident.participants |= involved
+        incident.people = max(incident.people, len(involved))
         self._raise_max(incident, risk)
         if incident.suppressed:
             incident.weapon = incident.weapon or held
@@ -288,4 +294,5 @@ class IncidentManager:
             duration_s=round(t - incident.started_at, 2),
             merged=merged,
             stream_ended=stream_ended,
+            people=incident.people,
         )

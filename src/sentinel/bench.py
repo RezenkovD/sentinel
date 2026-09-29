@@ -519,6 +519,16 @@ class WeaponVariant:
         return f"{'crops' if self.mode == 'crops' else ''}{self.imgsz}:{self.every_n_frames}"
 
 
+def with_openvino(config, export: Callable[[Path], Path] = export_openvino):
+    """The same config with people, pose and weapon models swapped for their OpenVINO exports on intel:cpu."""
+    m = config.models
+    person = m.person.model_copy(update={"weights": export(m.person.weights)})
+    pose = m.pose.model_copy(update={"weights": export(m.pose.weights)})
+    models = m.model_copy(update={"person": person, "pose": pose, "device": "intel:cpu"})
+    weapons = config.weapons.model_copy(update={"weights": export(config.weapons.weights)})
+    return config.model_copy(update={"models": models, "weapons": weapons})
+
+
 class _NoNotifier:
     def on_event(self, event: object) -> None:
         pass

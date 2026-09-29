@@ -193,3 +193,15 @@ def test_thresholds_must_leave_a_hysteresis_gap():
         BASE.model_validate(BASE.model_dump() | {"theta_low": 0.7})
     with _pytest.raises(ValidationError):
         BASE.model_validate(BASE.model_dump() | {"k": 6})
+
+
+def test_people_count_is_the_most_at_once_not_every_track_id_ever_seen():
+    # the tracker renumbers people during a fight: ids pile up, the number of people does not
+    manager, _ = _manager()
+    events = []
+    for i, ids in enumerate([(1, 2), (1, 2), (3, 4), (5, 6), (7, 8)] + [(9, 10)] * 12):
+        t = 1.0 + i
+        r = 0.7 if i < 5 else 0.2
+        events += manager.on_window(t, _risk(r), _scene(t, ids), snapshot=None)
+    close = [e for e in events if e.kind == "close"][0]
+    assert close.people == 2 and len(close.participants) > 2

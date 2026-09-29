@@ -58,6 +58,10 @@ def main(argv: list[str] | None = None) -> int:
 
         out = args.out or Path("results") / f"bench_pipeline_{date.today().isoformat()}.md"
         variants = [WeaponVariant.parse(v) for v in args.pipeline]
+        if args.format == "openvino":  # needs `uv run --with openvino`; not a project dependency
+            from sentinel.bench import with_openvino
+
+            config = with_openvino(config)
         warmup = config.bench.warmup_frames if args.warmup is None else args.warmup
         print(f"report: {run_pipeline_bench(config, args.source, variants, warmup, out)}")
         return 0

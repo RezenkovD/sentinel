@@ -237,3 +237,16 @@ def test_weapon_variants_are_parsed_from_the_command_line():
     assert WeaponVariant.parse("crops320:2").label == "crops320:2"
     with pytest.raises(ValueError):
         WeaponVariant.parse("640")
+
+
+def test_openvino_run_swaps_all_three_models_and_the_device():
+    from sentinel.bench import with_openvino
+    from sentinel.config import DEFAULT_CONFIG, load_config
+
+    config = load_config(Path(__file__).parents[1] / DEFAULT_CONFIG)
+    exported = with_openvino(config, export=lambda p: p.with_name(f"{p.stem}_openvino_model"))
+    assert exported.models.person.weights.name == "yolo26n_openvino_model"
+    assert exported.models.pose.weights.name == "yolo26n-pose_openvino_model"
+    assert exported.weapons.weights.name == "best_openvino_model"
+    assert exported.models.device == "intel:cpu"
+    assert config.models.device == "cpu"  # the original config is untouched

@@ -46,6 +46,8 @@ def caption(event: IncidentEvent) -> str:
     head = f"{TITLES[event.kind]} · {event.source}"
     if event.merged:
         head += " (поновлено)"
+    if event.stream_ended:
+        head += " (кінець відео / потоку)"
     if event.kind in ("open", "escalate"):
         when = f"Час: {_clock(event.t)}"
     else:
@@ -55,7 +57,7 @@ def caption(event: IncidentEvent) -> str:
     lines = [
         head,
         when,
-        f"Ризик: макс. {_num(event.max_risk)} · учасників: {len(event.participants)}",
+        f"Ризик: макс. {_num(event.max_risk)} · учасників: {event.people}",
         f"Причина: {event.reason_uk}",
     ]
     return "\n".join(lines)[:CAPTION_LIMIT]
