@@ -9,6 +9,7 @@ dependencies = [
     "pydantic",
     "scikit-learn",
     "python-dotenv",
+    "lap",  # required by ByteTrack in ultralytics (imported at module level; not declared by ultralytics)
     # Pulled in by ultralytics anyway; listed explicitly only to pin them to the CPU-only index below.
     "torch",
     "torchvision",

@@ -10,14 +10,14 @@ analysis:
 
 models:
   device: cpu
-  imgsz: 640              # detector / pose input size; bench compares 640 / 480 / 416
+  imgsz: 480              # people + pose input size (decision 29.09, docs/DECISIONS.md)
   threads: null           # torch intra-op threads; null = leave the Ultralytics default (8)
   person:
-    weights: weights/yolo11n.pt
+    weights: weights/yolo26n.pt
     conf: 0.1             # low on purpose: ByteTrack also uses low-score boxes (Ultralytics track default)
     tracker: configs/bytetrack.yaml
   pose:
-    weights: weights/yolo11n-pose.pt
+    weights: weights/yolo26n-pose.pt
     conf: 0.25
     # A skeleton is attached to one track (highest box IoU first) only if both hold:
     min_iou: 0.3          # box IoU between the skeleton's box and the track box
