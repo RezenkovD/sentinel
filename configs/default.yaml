@@ -95,8 +95,10 @@ incidents:                  # incident state machine (SPEC §7)
   k: 3                      # ATTENTION -> ALARM: risk >= theta_high in k of the last n windows
   n: 5
   quiet_s: 10.0             # COOLDOWN -> NORMAL after this long below theta_low (M)
-  merge_after_close_s: 30.0 # a new incident this soon after the previous one closed joins it
+  merge_after_close_s: 30.0 # a new incident this soon after the previous one closed joins it…
+  merge_participants_max_s: null  # …as does one sharing participants (null = any time later, as in SPEC §7)
   max_new_per_minute: 6     # more new incidents per minute are folded into one summary
+  update_interval_s: 10.0   # at most one update event per incident this often
   weapon_override_margin: 0.1  # weapon in hand -> risk >= theta_high + margin
   blur_faces: true
   output_dir: results/incidents

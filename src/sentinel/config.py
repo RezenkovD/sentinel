@@ -87,7 +87,9 @@ class IncidentsConfig(_Section):
     n: int = Field(ge=1)
     quiet_s: float = Field(ge=0)
     merge_after_close_s: float = Field(ge=0)
+    merge_participants_max_s: float | None = Field(default=None, ge=0)  # None = no time limit (SPEC §7)
     max_new_per_minute: int = Field(ge=1)
+    update_interval_s: float = Field(ge=0)
     weapon_override_margin: float = Field(ge=0)
     blur_faces: bool
     output_dir: Path
