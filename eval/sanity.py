@@ -84,6 +84,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--split", type=Path, default=Path("data/splits/rwf2000.json"))
     parser.add_argument("--root", type=Path, default=Path("data/raw/rwf2000"))
     parser.add_argument("--per-class", type=int, default=20)
+    parser.add_argument("--seed", type=int, default=SEED, help="clip sample (2026 = the tuning sample)")
     parser.add_argument(
         "--make-videos", action="store_true", help="(b) build the concatenated test videos only"
     )
@@ -112,7 +113,7 @@ def main(argv: list[str] | None = None) -> None:
     notifier = ConsoleNotifier(out / "incidents.jsonl")
     pipeline = build_pipeline(config, config.source.camera_id, "sanity", out / "journal.jsonl", notifier)
 
-    clips = pick_clips(args.split, args.per_class)
+    clips = pick_clips(args.split, args.per_class, args.seed)
     rows = []
     for clip in clips:
         pipeline.reset(run_id=f"sanity-{Path(clip).stem}")
@@ -145,7 +146,7 @@ def main(argv: list[str] | None = None) -> None:
         print(json.dumps(rows[-1], ensure_ascii=False), flush=True)
     notifier.close()
 
-    summary = {"clips": len(rows), "seed": SEED}
+    summary = {"clips": len(rows), "seed": args.seed}
     for label in ("Fight", "NonFight"):
         sub = [r for r in rows if r["label"] == label]
         summary[label] = {
