@@ -4,7 +4,7 @@ The face area comes from the face keypoints (nose, eyes, ears); without them, th
 is blurred instead. Frames with people are research data: key frames stay under results/ (outside git).
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import cv2
@@ -27,12 +27,14 @@ class Snapshot:
     tracks: list[Track]
     skeletons: dict[int, np.ndarray]
     weapons: list[WeaponBox]
+    # people the pose model saw without a confirmed track (box, keypoints): their faces are blurred too
+    others: list[tuple[tuple[float, float, float, float], np.ndarray | None]] = field(default_factory=list)
 
 
 def _face_region(
-    track: Track, skeleton: np.ndarray | None, shape: tuple[int, ...]
+    box: tuple[float, float, float, float], skeleton: np.ndarray | None, shape: tuple[int, ...]
 ) -> tuple[int, int, int, int]:
-    x1, y1, x2, y2 = track.box
+    x1, y1, x2, y2 = box
     box_h = y2 - y1
     points = (
         [skeleton[i, :2] for i in FACE_KEYPOINTS if skeleton[i, 2] >= FACE_POINT_CONF]
@@ -61,11 +63,13 @@ def render_keyframe(
     skeletons: dict[int, np.ndarray],
     weapons: list[WeaponBox],
     blur_faces: bool,
+    others: list[tuple[tuple[float, float, float, float], np.ndarray | None]] = (),
 ) -> np.ndarray:
     out = image.copy()
     if blur_faces:
-        for track in tracks:
-            x1, y1, x2, y2 = _face_region(track, skeletons.get(track.track_id), out.shape)
+        people = [(t.box, skeletons.get(t.track_id)) for t in tracks] + list(others)
+        for box, skeleton in people:
+            x1, y1, x2, y2 = _face_region(box, skeleton, out.shape)
             if x2 - x1 > 1 and y2 - y1 > 1:
                 size = max(x2 - x1, y2 - y1) // 2 * 2 + 1
                 out[y1:y2, x1:x2] = cv2.GaussianBlur(out[y1:y2, x1:x2], (size, size), 0)
@@ -94,7 +98,12 @@ class KeyframeWriter:
         if snapshot is None:
             return None
         image = render_keyframe(
-            snapshot.image, snapshot.tracks, snapshot.skeletons, snapshot.weapons, self.blur_faces
+            snapshot.image,
+            snapshot.tracks,
+            snapshot.skeletons,
+            snapshot.weapons,
+            self.blur_faces,
+            snapshot.others,
         )
         path = self.output_dir / incident_id / f"{name}.jpg"
         path.parent.mkdir(parents=True, exist_ok=True)

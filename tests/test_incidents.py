@@ -168,3 +168,28 @@ def test_too_many_new_incidents_per_minute_are_folded_into_a_summary():
     assert _kinds(events).count("open") == 2
     summaries = [e for e in events if e.kind == "summary"]
     assert len(summaries) == 1 and summaries[0].suppressed == 1
+
+
+def test_keyframe_comes_from_the_last_n_windows_not_a_stale_one():
+    # a long ATTENTION spell must not keep every frame, nor pick an hour-old one when the alarm opens
+    manager, keyframes = _manager()
+    _feed(manager, [0.95] + [0.5] * 100 + [0.7, 0.8, 0.7])
+    assert keyframes.saved[0][2] == "frame@103.0"  # the 0.8 window among the last n = 5
+
+
+def test_end_of_stream_closes_the_open_incident():
+    manager, _ = _manager()
+    _feed(manager, [0.7, 0.7, 0.7, 0.8])
+    events = manager.finish(t=4.5)
+    assert [e.kind for e in events] == ["close"] and events[0].stream_ended
+    assert manager.state is State.NORMAL and manager.finish(t=5.0) == []
+
+
+def test_thresholds_must_leave_a_hysteresis_gap():
+    import pytest as _pytest
+    from pydantic import ValidationError
+
+    with _pytest.raises(ValidationError):
+        BASE.model_validate(BASE.model_dump() | {"theta_low": 0.7})
+    with _pytest.raises(ValidationError):
+        BASE.model_validate(BASE.model_dump() | {"k": 6})

@@ -90,16 +90,19 @@ def _run(tmp_path: Path, seconds: float = 8.0):
     return notifier.events, keyframes.saved, [json.loads(line) for line in journal.read_text().splitlines()]
 
 
-def test_frames_become_windows_risk_and_one_incident(tmp_path: Path):
+def test_frames_become_windows_risk_and_one_incident_closed_at_the_end(tmp_path: Path):
     events, _, journal = _run(tmp_path)
-    assert [e.kind for e in events] == ["open"]
-    assert events[0].incident_id.startswith("test-cam-1-")
-    assert len(journal) == 8  # one line per 1 s window, the last one flushed at the end
+    assert [e.kind for e in events] == ["open", "close"]  # the fight lasts until the video ends
+    assert events[0].incident_id.startswith("test-cam-1-") and events[1].stream_ended
+    assert len(journal) == 9  # one line per 1 s window (the last flushed) + the end of the stream
+    assert journal[-1]["stream_end"] and journal[-1]["events"] == [
+        {"kind": "close", "incident_id": events[0].incident_id}
+    ]
 
 
 def test_journal_line_holds_scene_risk_state_frame_age_and_timing(tmp_path: Path):
     _, _, journal = _run(tmp_path)
-    assert journal[4]["events"] == ["open"]  # windows [2,3), [3,4), [4,5) are the 3 of 5
+    assert [e["kind"] for e in journal[4]["events"]] == ["open"]  # windows [2,3), [3,4), [4,5) are 3 of 5
     line = journal[5]
     assert line["scene"]["schema_version"] == 2 and line["scene"]["summary"]["n_persons"] == 2
     assert line["risk"]["risk"] == 0.9 and line["state"] == "тривога"
@@ -132,3 +135,77 @@ def test_last_frame_stage_times_are_exposed_for_the_bench(tmp_path: Path):
     )
     pipeline.process(Frame(image=np.zeros((10, 10, 3), dtype=np.uint8), t=0.0, index=0))
     assert set(pipeline.last_timing_ms) == {"people", "pose", "weapons", "scene", "decision"}
+
+
+class PoseWithBystander(NoSkeletons):
+    """Fake pose agent that also saw a person the tracker has not confirmed yet."""
+
+    last_people = [((500.0, 0.0, 540.0, 100.0), np.zeros((17, 3)))]
+
+
+def test_keyframe_snapshot_carries_untracked_people_for_face_blurring(tmp_path: Path):
+    people = TwoPeople()
+    keyframes = RecordKeyframes()
+    pipeline = Pipeline(
+        Agents(people=people, poser=PoseWithBystander(), weapons=NoWeapons()),
+        CloseMeansDanger(),
+        Collect(),
+        CONFIG,
+        source_id="cam-1",
+        run_id="t",
+        journal=None,
+        keyframes=keyframes,
+    )
+    for i in range(60):
+        people.t = round(0.1 * i, 1)
+        pipeline.process(Frame(image=np.zeros((100, 700, 3), dtype=np.uint8), t=people.t, index=i))
+    _, snapshot = keyframes.saved[0]
+    assert snapshot.others == PoseWithBystander.last_people
+
+
+class ScriptedReader:
+    """Yields frames, then either ends or fails like a broken camera."""
+
+    def __init__(self, frames: int, fail: bool) -> None:
+        self.frames, self.fail = frames, fail
+
+    def __iter__(self):
+        for i in range(self.frames):
+            yield Frame(image=np.zeros((4, 4, 3), dtype=np.uint8), t=0.1 * i, index=i)
+        if self.fail:
+            raise RuntimeError("reading the video source failed")
+
+
+class RecordingPipeline:
+    def __init__(self) -> None:
+        self.processed, self.finished = 0, False
+
+    def process(self, frame, age_s=None):
+        self.processed += 1
+        return []
+
+    def finish(self):
+        self.finished = True
+        return []
+
+
+def test_camera_failure_is_reported_and_open_incidents_are_still_closed():
+    from sentinel.pipeline import drive
+
+    pipeline = RecordingPipeline()
+    result = drive(ScriptedReader(3, fail=True), pipeline, mode="live")
+    assert pipeline.processed == 3 and pipeline.finished
+    assert result.error and result.source_lost
+
+
+def test_a_live_stream_that_just_ends_counts_as_lost():
+    from sentinel.pipeline import drive
+
+    assert drive(ScriptedReader(3, fail=False), RecordingPipeline(), mode="live").source_lost
+
+
+def test_a_file_that_ends_is_not_a_failure():
+    from sentinel.pipeline import drive
+
+    result = drive(ScriptedReader(3, fail=False), RecordingPipeline(), mode="offline")
+    assert not result.source_lost and result.error is None and result.frames == 3

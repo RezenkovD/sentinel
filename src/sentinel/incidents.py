@@ -47,6 +47,7 @@ class IncidentEvent:
     duration_s: float
     merged: bool = False  # the incident was re-opened by a new alarm (joined, not a new incident)
     suppressed: int = 0  # summary: incidents folded in during the current minute
+    stream_ended: bool = False  # closed because the video / camera stream ended, not by calm
 
 
 @dataclass
@@ -81,7 +82,9 @@ class IncidentManager:
         self.run_id = run_id
         self.state = State.NORMAL
         self._high: deque[bool] = deque(maxlen=cfg.n)
-        self._candidates: list[tuple[float, Any]] = []  # (risk, snapshot) of windows since ATTENTION began
+        # (risk, snapshot) of the last n windows since ATTENTION began: bounded, so a long ATTENTION spell
+        # neither piles up full-resolution frames nor offers a stale key frame
+        self._candidates: deque[tuple[float, Any]] = deque(maxlen=cfg.n)
         self._incident: Incident | None = None
         self._last: Incident | None = None
         self._quiet_since: float | None = None
@@ -101,7 +104,8 @@ class IncidentManager:
         events: list[IncidentEvent] = []
         if self.state is State.NORMAL:
             if held or high:
-                self._candidates = [(r, snapshot)]
+                self._candidates.clear()
+                self._candidates.append((r, snapshot))
                 if held:
                     events += self._alarm(t, risk, scene, snapshot)
                 else:
@@ -112,7 +116,7 @@ class IncidentManager:
                 events += self._alarm(t, risk, scene, snapshot)
             elif r < cfg.theta_low:
                 self.state = State.NORMAL
-                self._candidates = []
+                self._candidates.clear()
         elif self.state is State.ALARM:
             events += self._continue(t, risk, scene, snapshot, held)
             if r < cfg.theta_low:
@@ -143,7 +147,7 @@ class IncidentManager:
         people = participants(scene)
         held = any(p.holds for p in scene.persons)
         best_risk, best_snapshot = max(self._candidates or [(risk.risk, snapshot)], key=lambda c: c[0])
-        self._candidates = []
+        self._candidates.clear()
         last = self._last
         if last is not None and last.closed_at is not None and self._joins(last, people, t):
             self._incident, self._last = last, None
@@ -205,14 +209,24 @@ class IncidentManager:
             return [self._event("update", incident, t)]
         return []
 
-    def _close(self, t: float) -> list[IncidentEvent]:
+    def finish(self, t: float) -> list[IncidentEvent]:
+        """End of the stream: close an incident that is still open (its message must not stay "ALARM")."""
+        self._candidates.clear()
+        if self._incident is None:
+            self.state = State.NORMAL
+            return []
+        return self._close(t, stream_ended=True)
+
+    def _close(self, t: float, stream_ended: bool = False) -> list[IncidentEvent]:
         incident = self._incident
         assert incident is not None
         self.state = State.NORMAL
         self._quiet_since = None
         incident.closed_at = t
         self._incident, self._last = None, incident
-        return [] if incident.suppressed else [self._event("close", incident, t, level="normal")]
+        if incident.suppressed:
+            return []
+        return [self._event("close", incident, t, level="normal", stream_ended=stream_ended)]
 
     # --- helpers ---
 
@@ -258,6 +272,7 @@ class IncidentManager:
         keyframe: Path | None = None,
         merged: bool = False,
         level: str = "alarm",
+        stream_ended: bool = False,
     ) -> IncidentEvent:
         return IncidentEvent(
             kind=kind,
@@ -272,4 +287,5 @@ class IncidentManager:
             started_at=incident.started_at,
             duration_s=round(t - incident.started_at, 2),
             merged=merged,
+            stream_ended=stream_ended,
         )

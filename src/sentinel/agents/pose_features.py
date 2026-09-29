@@ -102,16 +102,24 @@ class PoseEstimator:
         self.conf = conf
         self.rules = rules
         self.device = device
+        # every skeleton of the last frame (box, keypoints), matched or not: key frames blur all faces
+        self.last_people: list[tuple[tuple[float, float, float, float], np.ndarray]] = []
 
     def estimate(self, frame: np.ndarray, tracks: list[Track]) -> dict[int, np.ndarray]:
         """{track_id: keypoints (17, 3) as x, y, confidence in frame pixels} for tracks with a skeleton."""
         result = self.model.predict(
             frame, imgsz=self.imgsz, conf=self.conf, device=self.device, verbose=False
         )[0]
-        if result.keypoints is None or not tracks:
+        if result.keypoints is None:
+            self.last_people = []
             return {}
         pose_boxes = result.boxes.xyxy.cpu().numpy()
         keypoints = result.keypoints.data.cpu().numpy()
+        self.last_people = [
+            (tuple(float(v) for v in b), k) for b, k in zip(pose_boxes, keypoints, strict=True)
+        ]
+        if not tracks:
+            return {}
         track_boxes = np.array([t.box for t in tracks])
         r = self.rules
         matches = match_poses(

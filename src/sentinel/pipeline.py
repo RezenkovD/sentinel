@@ -54,11 +54,12 @@ class _Window:
         weapons: list[WeaponBox],
         timing_ms: dict[str, float],
         age_s: float | None,
+        others: list | None = None,
     ) -> None:
         rank = (int(bool(weapons)), len(tracks))  # prefer a frame showing a weapon, then the most people
         if rank >= self.rank:
             self.rank = rank
-            self.snapshot = Snapshot(frame.image, tracks, skeletons, weapons)
+            self.snapshot = Snapshot(frame.image, tracks, skeletons, weapons, list(others or []))
         for stage, ms in timing_ms.items():
             self.timing_ms[stage] += ms
         self.frames += 1
@@ -98,6 +99,7 @@ class Pipeline:
         self._window = _Window()
         self.windows = 0
         self.last_timing_ms: dict[str, float] = {}
+        self._last_t = 0.0
 
     def process(self, frame: Frame, age_s: float | None = None) -> list[IncidentEvent]:
         timing: dict[str, float] = {}
@@ -119,13 +121,29 @@ class Pipeline:
             events = self._close_window(scene)
             self._window = _Window()  # this frame opens the next window
         self.last_timing_ms = timing | {"decision": _ms_since(started) if scene is not None else 0.0}
-        self._window.add(frame, tracks, skeletons, weapons, timing, age_s)
+        others = getattr(self.agents.poser, "last_people", [])
+        self._window.add(frame, tracks, skeletons, weapons, timing, age_s, others)
+        self._last_t = frame.t
         return events
 
     def finish(self) -> list[IncidentEvent]:
-        """End of the stream: close the last window."""
+        """End of the stream: close the last window and any incident still open."""
         scene = self.builder.flush()
-        return self._close_window(scene) if scene is not None else []
+        events = self._close_window(scene) if scene is not None else []
+        t_end = scene.window.t_end if scene is not None else self._last_t
+        closing = self.incidents.finish(t_end)
+        for event in closing:
+            self.notifier.on_event(event)
+        if self.journal is not None and closing:
+            line = {
+                "t": t_end,
+                "stream_end": True,
+                "state": self.incidents.state.value,
+                "events": _events(closing),
+            }
+            with self.journal.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(line, ensure_ascii=False) + "\n")
+        return events + closing
 
     def _close_window(self, scene: SceneDescription) -> list[IncidentEvent]:
         started = time.perf_counter()
@@ -145,7 +163,7 @@ class Pipeline:
                 "state": self.incidents.state.value,
                 "frame_age_s": None if self._window.last_age_s is None else round(self._window.last_age_s, 3),
                 "timing_ms": timing,
-                "events": [e.kind for e in events],
+                "events": _events(events),
             }
             with self.journal.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(line, ensure_ascii=False) + "\n")
@@ -154,6 +172,37 @@ class Pipeline:
 
 def _ms_since(started: float) -> float:
     return (time.perf_counter() - started) * 1000
+
+
+def _events(events: list[IncidentEvent]) -> list[dict[str, str]]:
+    return [{"kind": e.kind, "incident_id": e.incident_id} for e in events]
+
+
+@dataclass
+class DriveResult:
+    frames: int
+    incidents: set[str]
+    error: str | None  # the source failed (e.g. a camera read error)
+    source_lost: bool  # a live stream stopped by itself (not by Ctrl+C)
+
+
+def drive(reader: Any, pipeline: Any, mode: str) -> DriveResult:
+    """Feed frames to the pipeline until the source ends, fails or Ctrl+C; always closes open incidents."""
+    frames, incidents, error, interrupted = 0, set(), None, False
+    started = time.monotonic()  # the reader's own clock starts on the first read, right below
+    try:
+        for frame in reader:
+            age = None if mode == "offline" else time.monotonic() - started - frame.t
+            incidents |= {e.incident_id for e in pipeline.process(frame, age)}
+            frames += 1
+    except KeyboardInterrupt:
+        interrupted = True
+    except RuntimeError as exc:  # LatestFrameReader: reading the source failed
+        error = f"{exc}: {exc.__cause__}" if exc.__cause__ else str(exc)
+    finally:
+        incidents |= {e.incident_id for e in pipeline.finish()}
+    lost = mode == "live" and not interrupted
+    return DriveResult(frames, incidents, error, lost)
 
 
 def build_pipeline(
@@ -188,32 +237,25 @@ def build_pipeline(
 def run_source(config: Config, source: str, paced: bool, results: Path = Path("results")) -> dict:
     """`sentinel run`: a camera / RTSP stream (live) or a file (paced or offline) until it ends or Ctrl+C."""
     import os
+    import sys
 
-    from dotenv import load_dotenv
+    from dotenv import find_dotenv, load_dotenv
 
     from sentinel.io.source import LatestFrameReader
     from sentinel.notify import make_notifier
 
-    load_dotenv()
+    load_dotenv(find_dotenv(usecwd=True))  # .env of the working directory (also in Docker)
     run_id = time.strftime("%Y%m%d-%H%M%S")
     live = source.isdigit() or "://" in source
     mode = "live" if live else "paced" if paced else "offline"
     notifier = make_notifier(os.environ, config.notify.incidents_jsonl, config.notify.edit_interval_s)
+    print(f"notifications: {type(notifier).__name__}", file=sys.stderr)
     journal = results / f"run_{run_id}.jsonl"
     pipeline = build_pipeline(config, config.source.camera_id, run_id, journal, notifier)
     reader = LatestFrameReader(source, mode, target_fps=config.analysis.fps)
-    incidents: set[str] = set()
-    frames = 0
-    started = time.monotonic()  # the reader's own clock starts on the first read, right below
+    started = time.monotonic()
     try:
-        try:
-            for frame in reader:
-                age = None if mode == "offline" else time.monotonic() - started - frame.t
-                incidents |= {e.incident_id for e in pipeline.process(frame, age)}
-                frames += 1
-        except KeyboardInterrupt:
-            pass
-        incidents |= {e.incident_id for e in pipeline.finish()}
+        result = drive(reader, pipeline, mode)
     finally:
         reader.close()
         notifier.close()
@@ -222,12 +264,16 @@ def run_source(config: Config, source: str, paced: bool, results: Path = Path("r
     summary = {
         "mode": mode,
         "journal": str(journal),
-        "frames_analysed": frames,
+        "frames_analysed": result.frames,
         "windows": pipeline.windows,
-        "incidents": sorted(incidents),
+        "incidents": sorted(result.incidents),
         "wall_s": round(wall, 1),
         "skipped_share": round(stats.skipped / stats.received, 3) if stats.received else None,
+        "source_error": result.error,
+        "source_lost": result.source_lost,
     }
     if not live and reader.source_fps > 0 and stats.received:
         summary["rtf"] = round(wall / (stats.received / reader.source_fps), 2)
+    if result.error or result.source_lost:
+        print(f"camera / stream unavailable: {result.error or 'the stream ended'}", file=sys.stderr)
     return summary

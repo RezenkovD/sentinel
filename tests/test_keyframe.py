@@ -61,3 +61,10 @@ def test_writer_saves_the_keyframe_under_the_incident(tmp_path: Path):
     assert path == tmp_path / "cam-1-001" / "keyframe.jpg"
     assert cv2.imread(str(path)).shape == (400, 600, 3)
     assert writer("cam-1-001", "escalate_1", None) is None  # no frame to show
+
+
+def test_faces_of_people_without_a_track_are_blurred_too():
+    image = _checkerboard()
+    bystander = ((200.0, 100.0, 300.0, 380.0), _face_keypoints())  # seen by the pose model only
+    out = render_keyframe(image, [], {}, [], blur_faces=True, others=[bystander])
+    assert _detail(out, 240, 130, 260, 150) < 0.2 * _detail(image, 240, 130, 260, 150)

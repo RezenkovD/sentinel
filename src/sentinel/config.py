@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from sentinel.agents.features import FeatureConfig
 
@@ -108,6 +108,14 @@ class IncidentsConfig(_Section):
     weapon_override_margin: float = Field(ge=0)
     blur_faces: bool
     output_dir: Path
+
+    @model_validator(mode="after")
+    def _hysteresis(self) -> "IncidentsConfig":
+        if not self.theta_low < self.theta_high:
+            raise ValueError(f"theta_low ({self.theta_low}) must be below theta_high ({self.theta_high})")
+        if self.k > self.n:
+            raise ValueError(f"k ({self.k}) cannot exceed n ({self.n})")
+        return self
 
 
 class BenchConfig(_Section):

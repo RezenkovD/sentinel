@@ -50,8 +50,9 @@ def main(argv: list[str] | None = None) -> int:
 
         from sentinel.pipeline import run_source
 
-        print(json.dumps(run_source(config, args.source, args.paced), ensure_ascii=False))
-        return 0
+        summary = run_source(config, args.source, args.paced)
+        print(json.dumps(summary, ensure_ascii=False))
+        return 1 if summary["source_error"] or summary["source_lost"] else 0
     if args.command == "bench" and args.pipeline:
         from sentinel.bench import WeaponVariant, run_pipeline_bench
 
