@@ -602,6 +602,7 @@ def run_pipeline_bench(
         print(json.dumps(rows[-1]), flush=True)
     report = {
         "power": asdict(power),
+        "device": config.models.device,
         "fps": fps,
         "clips": [s.name for s in sources],
         "warmup": warmup,
@@ -618,7 +619,8 @@ def render_pipeline_report(report: dict, sources: Sequence[Path]) -> str:
         f"# Bench: повний конвеєр — {time.strftime('%Y-%m-%d')}",
         "",
         "Середовище: " + "; ".join(environment_notes()) + f"; живлення: {PowerState(**report['power'])}.",
-        f"Частота аналізу {fps:g} кадрів/с; прогрів {report['warmup']} кадрів; кліпів {len(sources)}:",
+        f"Бекенд: {report.get('device', 'cpu')} (cpu = PyTorch, intel:cpu = OpenVINO); "
+        f"частота аналізу {fps:g} кадрів/с; прогрів {report['warmup']} кадрів; кліпів {len(sources)}:",
         *[f"- {clip_info(s)}" for s in sources],
         "",
         "Конвеєр: люди + трек (YOLO26n) → поза (YOLO26n-pose) → зброя (варіант) → ознаки й опис сцени → "
