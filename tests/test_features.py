@@ -17,7 +17,7 @@ from sentinel.agents.weapons import WeaponBox
 CFG = FeatureConfig(
     min_keypoint_conf=0.5,
     hold_margin_h=0.1,
-    hold_min_frames=2,
+    hold_min_detections=2,
     pair_max_distance_h=2.0,
     max_pairs=5,
     contact_distance_h=1.0,
@@ -83,13 +83,13 @@ def test_speed_is_the_median_over_the_window():
     assert person_speed(track, H) == pytest.approx(1.0)
 
 
-def _gun_at(x: float, y: float) -> WeaponBox:
-    return WeaponBox("gun", (x - 5.0, y - 5.0, x + 5.0, y + 5.0), 0.8)
+def _gun_at(x: float, y: float, conf: float = 0.8) -> WeaponBox:
+    return WeaponBox("gun", (x - 5.0, y - 5.0, x + 5.0, y + 5.0), conf)
 
 
 def test_weapon_at_the_wrist_in_two_frames_is_held():
     track = _wrist_track([0.0, 0.1, 0.2], [50.0, 50.0, 50.0])
-    weapons = {0.0: [_gun_at(50.0, 50.0)], 0.1: [_gun_at(50.0, 50.0)], 0.2: []}
+    weapons = {0.0: [_gun_at(50.0, 50.0, 0.8)], 0.1: [_gun_at(50.0, 50.0, 0.7)], 0.2: []}  # two detections
     assert holds(track, weapons, H, CFG) == "gun"
 
 
@@ -107,7 +107,7 @@ def test_weapon_nearby_but_not_in_hand_is_not_held():
 def test_hold_margin_is_measured_in_person_heights():
     track = _wrist_track([0.0, 0.1], [50.0, 50.0])
     # box edge 8 px from the wrist; margin 0.1 height = 10 px reaches it
-    near = {t: [WeaponBox("knife", (58.0, 45.0, 70.0, 55.0), 0.6)] for t in (0.0, 0.1)}
+    near = {t: [WeaponBox("knife", (58.0, 45.0, 70.0, 55.0), 0.6 + t)] for t in (0.0, 0.1)}
     assert holds(track, near, H, CFG) == "knife"
 
 
@@ -163,3 +163,12 @@ def test_contact_duration_carries_over_the_window_boundary_and_resets_on_separat
         if round(t + 0.1, 1) in (1.0, 2.0, 3.0):  # window ends
             windows.append(tracker.window_durations().get(pair, 0.0))
     assert windows == pytest.approx([0.4, 1.3, 0.0])
+
+
+def test_one_detection_kept_over_frames_by_the_every_nth_schedule_counts_once():
+    # the weapon detector runs every 2nd frame and keeps its last boxes in between: the same box twice
+    track = _wrist_track([0.0, 0.1, 0.2, 0.3], [50.0, 50.0, 50.0, 50.0])
+    same = _gun_at(50.0, 50.0)
+    assert holds(track, {0.0: [same], 0.1: [same]}, H, CFG) is None
+    fresh = WeaponBox("gun", (46.0, 45.0, 56.0, 55.0), 0.7)  # a new detection two frames later
+    assert holds(track, {0.0: [same], 0.1: [same], 0.2: [fresh], 0.3: [fresh]}, H, CFG) == "gun"

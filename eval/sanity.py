@@ -32,13 +32,76 @@ def pick_clips(split: Path, per_class: int, seed: int = SEED) -> list[str]:
     return picked
 
 
+def concat_plan(split: Path, gaps: list[int], seed: int = SEED) -> list[tuple[str, list[str]]]:
+    """NonFight / Fight segments from our train part; a Fight segment = two consecutive clips."""
+    train = json.loads(split.read_text())["train"]
+    rng = random.Random(seed)
+    by_video: dict[str, list[str]] = {}
+    for p in train:
+        if "/Fight/" in p:
+            stem = Path(p).stem
+            video, _, index = stem.rpartition("_")
+            if index.isdigit():
+                by_video.setdefault(video, []).append(p)
+    videos = sorted(v for v, clips in by_video.items() if len(clips) >= 2)
+    calm = [p for p in train if "/NonFight/" in p]
+    rng.shuffle(calm)
+    fights = rng.sample(videos, len(gaps) - 1)
+    plan = []
+    for i, gap in enumerate(gaps):
+        plan.append(("NonFight", [calm.pop() for _ in range(gap)]))
+        if i < len(fights):
+            clips = sorted(by_video[fights[i]], key=lambda p: int(Path(p).stem.rpartition("_")[2]))[:2]
+            plan.append(("Fight", clips))
+    return plan
+
+
+def make_video(plan: list[tuple[str, list[str]]], root: Path, out: Path) -> list[dict]:
+    """ffmpeg concat at 1280x720, 30 fps; returns the segments with their start / end in seconds."""
+    import subprocess
+
+    clips = [c for _, seg in plan for c in seg]
+    inputs = [arg for c in clips for arg in ("-i", str(root / c))]
+    scale = (
+        "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,fps=30,setsar=1"
+    )
+    chains = "".join(f"[{i}:v]{scale}[v{i}];" for i in range(len(clips)))
+    joined = "".join(f"[v{i}]" for i in range(len(clips)))
+    graph = f"{chains}{joined}concat=n={len(clips)}:v=1:a=0[out]"
+    cmd = ["ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", graph, "-map", "[out]"]
+    cmd += ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-an", str(out)]
+    subprocess.run(cmd, check=True)
+    segments, t = [], 0.0
+    for label, seg in plan:
+        segments.append({"label": label, "start_s": t, "end_s": t + 5.0 * len(seg), "clips": seg})
+        t += 5.0 * len(seg)
+    return segments
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--split", type=Path, default=Path("data/splits/rwf2000.json"))
     parser.add_argument("--root", type=Path, default=Path("data/raw/rwf2000"))
     parser.add_argument("--per-class", type=int, default=20)
+    parser.add_argument(
+        "--make-videos", action="store_true", help="(b) build the concatenated test videos only"
+    )
     args = parser.parse_args(argv)
+
+    if args.make_videos:
+        out_dir = Path("results/sanity_videos")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        variants = {"one_minute": [2, 3, 3], "long_gaps": [2, 9, 9]}  # NonFight clips (5 s) around two fights
+        manifest = {}
+        for name, gaps in variants.items():
+            plan = concat_plan(args.split, gaps)
+            manifest[name] = make_video(plan, args.root, out_dir / f"{name}.mp4")
+        (out_dir / "segments.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1))
+        print(
+            json.dumps({k: [(s["label"], s["start_s"], s["end_s"]) for s in v] for k, v in manifest.items()})
+        )
+        return
 
     config = load_config(args.config)
     out = Path("results") / f"sanity_{time.strftime('%Y%m%d-%H%M%S')}"
@@ -53,8 +116,9 @@ def main(argv: list[str] | None = None) -> None:
     rows = []
     for clip in clips:
         pipeline.reset(run_id=f"sanity-{Path(clip).stem}")
-        events, risks = [], []
-        before = pipeline.windows
+        events = []
+        journal_path = out / "journal.jsonl"
+        before = len(journal_path.read_text(encoding="utf-8").splitlines()) if journal_path.exists() else 0
         started = time.perf_counter()
         with LatestFrameReader(args.root / clip, mode="offline", target_fps=config.analysis.fps) as reader:
             for frame in reader:
@@ -62,7 +126,7 @@ def main(argv: list[str] | None = None) -> None:
             events += pipeline.finish()
             duration = reader.stats.received / reader.source_fps
         wall = time.perf_counter() - started
-        journal = (out / "journal.jsonl").read_text(encoding="utf-8").splitlines()
+        journal = journal_path.read_text(encoding="utf-8").splitlines()
         risks = [json.loads(line)["risk"]["risk"] for line in journal[before:]]
         rows.append(
             {
@@ -71,6 +135,9 @@ def main(argv: list[str] | None = None) -> None:
                 "incident": any(e.kind == "open" for e in events),
                 "events": [e.kind for e in events],
                 "risks": risks,
+                "weapon_windows": sum(
+                    json.loads(line)["scene"]["summary"]["weapon_visible"] for line in journal[before:]
+                ),
                 "max_risk": max(risks, default=0.0),
                 "rtf": round(wall / duration, 2),
             }

@@ -5,7 +5,6 @@ height: the median height of the track box over the window (units: heights, heig
 A feature that cannot be computed is None rather than an invented value.
 """
 
-from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
 from itertools import pairwise
@@ -23,7 +22,7 @@ Pair = tuple[int, int]
 class FeatureConfig:
     min_keypoint_conf: float  # keypoints below this score are not used
     hold_margin_h: float  # weapon box expansion for "holds", in heights
-    hold_min_frames: int  # frames of the window with a wrist in the (expanded) weapon box
+    hold_min_detections: int  # distinct weapon detections in the window with a wrist in the (expanded) box
     pair_max_distance_h: float  # only pairs closer than this go into the description
     max_pairs: int
     contact_distance_h: float  # a pair closer than this is "in contact"
@@ -82,23 +81,26 @@ def limb_accel(obs: Sequence[Observation], h: float, cfg: FeatureConfig) -> floa
 def holds(
     obs: Sequence[Observation], weapons_at: dict[float, list[WeaponBox]], h: float, cfg: FeatureConfig
 ) -> str | None:
-    """Weapon kind whose box (expanded by hold_margin_h heights) contains a wrist in enough frames."""
+    """Weapon kind whose (expanded) box contains a wrist in at least hold_min_detections distinct detections.
+
+    Distinct detections, not frames: a detector running every n-th frame keeps its last boxes in between, and
+    one detection must not count as several.
+    """
     margin = cfg.hold_margin_h * h
-    frames: Counter[str] = Counter()
+    detections: dict[str, set[WeaponBox]] = {}
     for o in obs:
         wrists = [p for w in (LEFT_WRIST, RIGHT_WRIST) if (p := _point(o, w, cfg)) is not None]
-        kinds = {
-            weapon.kind
-            for weapon in weapons_at.get(o.t, [])
-            for x, y in wrists
-            if weapon.box[0] - margin <= x <= weapon.box[2] + margin
-            and weapon.box[1] - margin <= y <= weapon.box[3] + margin
-        }
-        frames.update(kinds)
-    held = [k for k, n in frames.items() if n >= cfg.hold_min_frames]
+        for weapon in weapons_at.get(o.t, []):
+            if any(
+                weapon.box[0] - margin <= x <= weapon.box[2] + margin
+                and weapon.box[1] - margin <= y <= weapon.box[3] + margin
+                for x, y in wrists
+            ):
+                detections.setdefault(weapon.kind, set()).add(weapon)
+    held = [k for k, found in detections.items() if len(found) >= cfg.hold_min_detections]
     if not held:
         return None
-    return max(held, key=lambda k: (frames[k], k == "gun"))
+    return max(held, key=lambda k: (len(detections[k]), k == "gun"))
 
 
 def distance_series(

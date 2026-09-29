@@ -66,7 +66,7 @@ class NotifyConfig(_Section):
 class FeaturesConfig(_Section):
     min_keypoint_conf: float = Field(ge=0, le=1)
     hold_margin_h: float = Field(ge=0)
-    hold_min_frames: int = Field(ge=1)
+    hold_min_detections: int = Field(ge=1)
     pair_max_distance_h: float = Field(gt=0)
     max_pairs: int = Field(ge=0)
     contact_distance_h: float = Field(gt=0)

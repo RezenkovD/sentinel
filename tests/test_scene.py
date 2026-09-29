@@ -13,7 +13,7 @@ from sentinel.schema import Zone
 CFG = FeatureConfig(
     min_keypoint_conf=0.5,
     hold_margin_h=0.1,
-    hold_min_frames=2,
+    hold_min_detections=2,
     pair_max_distance_h=2.0,
     max_pairs=5,
     contact_distance_h=1.0,
@@ -63,10 +63,12 @@ def test_person_without_skeleton_gets_null_limb_features():
 
 
 def test_weapon_in_hand_versus_weapon_in_view():
-    gun_in_hand = WeaponBox("gun", (45.0, 45.0, 55.0, 55.0), 0.8)
+    def gun_in_hand(i: int) -> WeaponBox:  # a fresh detection in every frame
+        return WeaponBox("gun", (45.0, 45.0, 55.0, 55.0), 0.8 - 0.01 * i)
+
     gun_far = WeaponBox("gun", (400.0, 45.0, 410.0, 55.0), 0.8)
     held = [
-        (round(0.1 * i, 1), [_track(1, 0.0)], {1: _wrist_skeleton(50.0, 50.0)}, [gun_in_hand])
+        (round(0.1 * i, 1), [_track(1, 0.0)], {1: _wrist_skeleton(50.0, 50.0)}, [gun_in_hand(i)])
         for i in range(10)
     ]
     seen = [
