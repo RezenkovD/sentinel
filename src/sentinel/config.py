@@ -68,7 +68,7 @@ class FeaturesConfig(_Section):
     hold_margin_h: float = Field(ge=0)
     hold_min_detections: int = Field(ge=1)
     pair_max_distance_h: float = Field(gt=0)
-    max_pairs: int = Field(ge=0)
+    max_pairs: int = Field(ge=0, le=5)  # SPEC §5: at most 5 pairs per scene description
     contact_distance_h: float = Field(gt=0)
     facing_min_offset_h: float = Field(ge=0)
 
@@ -89,6 +89,7 @@ class ZonePriorConfig(_Section):
 class AggregatorAConfig(_Section):
     bias: float
     clip: float = Field(gt=0)
+    reason_min_contribution: float = Field(ge=0)
     weights: dict[str, float]
     scale: dict[str, float]
     neutral: dict[str, float]

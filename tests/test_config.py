@@ -40,3 +40,12 @@ def test_shipped_zone_profiles_are_valid():
 def test_feature_thresholds_come_from_the_config():
     features = load_config(DEFAULT).features.to_feature_config()
     assert features.contact_distance_h < features.pair_max_distance_h
+
+
+def test_more_than_five_pairs_is_rejected_at_load_time(tmp_path: Path):
+    # SPEC §5 allows at most 5 pairs in a scene description; a larger value would stop the run later
+    text = DEFAULT.read_text().replace("  max_pairs: 5", "  max_pairs: 6")
+    path = tmp_path / "pairs.yaml"
+    path.write_text(text)
+    with pytest.raises(ValidationError):
+        load_config(path)

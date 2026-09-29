@@ -33,6 +33,7 @@ FEATURE_NAMES = (
     "limb_accel_missing",
 )
 _WEAPON_UK = {"gun": "вогнепальна зброя", "knife": "ніж"}
+_REASON_GROUP = {"crowd_motion": "motion", "max_speed": "motion"}  # one phrase per group in an explanation
 
 
 def _num(value: float) -> str:
@@ -151,13 +152,18 @@ class RulesAggregator:
     def _explain(self, z: np.ndarray, x: dict[str, float], scene: SceneDescription) -> str:
         """Two or three largest contributions against the neutral (calm) scene, as Ukrainian phrases."""
         contributions = self.weights * (z - self._neutral_z)
-        order = np.argsort(-contributions)
-        phrases = []
-        for i in order[:3]:
-            if contributions[i] < 0.1:
+        floor = self.config.aggregator_a.reason_min_contribution
+        phrases: list[str] = []
+        groups: set[str] = set()
+        for i in np.argsort(-contributions):
+            name = FEATURE_NAMES[i]
+            if contributions[i] < floor or len(phrases) == 3:
                 break
-            if (phrase := _reason(FEATURE_NAMES[i], x, scene)) is not None and phrase not in phrases:
-                phrases.append(phrase)
+            group = _REASON_GROUP.get(name, name)
+            if group in groups or (phrase := _reason(name, x, scene)) is None:
+                continue
+            groups.add(group)
+            phrases.append(phrase)
         if not phrases:
             return "Ознак небезпеки немає"
         text = "; ".join(phrases)

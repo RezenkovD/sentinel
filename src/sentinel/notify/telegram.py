@@ -34,6 +34,7 @@ class TelegramNotifier:
         edit_interval_s: float = 10.0,
         retries: int = 3,
         timeout_s: float = 10.0,
+        max_wait_s: float = 60.0,
         start_worker: bool = True,
     ) -> None:
         self._token = token
@@ -41,7 +42,9 @@ class TelegramNotifier:
         self._session = session or requests.Session()
         self._clock, self._sleep = clock, sleep
         self.edit_interval_s, self.retries, self.timeout_s = edit_interval_s, retries, timeout_s
+        self.max_wait_s = max_wait_s  # cap on a 429 retry_after pause: the queue must keep moving
         self._messages: dict[str, dict[str, int]] = {}  # incident -> chat -> message id
+        self._photo: dict[str, bool] = {}  # incident -> its message carries a photo (else plain text)
         self._last_edit: dict[str, float] = {}
         self._pending: dict[str, str] = {}  # incident -> newest caption waiting for its edit slot
         self._queue: queue.Queue[IncidentEvent | None] = queue.Queue()
@@ -81,15 +84,11 @@ class TelegramNotifier:
 
     def handle(self, event: IncidentEvent) -> None:
         text = caption(event)
-        if event.kind == "open":
-            self._messages[event.incident_id] = {
-                chat: mid
-                for chat in self.chat_ids
-                if (mid := self._send(chat, text, event.keyframe)) is not None
-            }
-            self._last_edit[event.incident_id] = self._clock()
+        if event.kind == "open" or not self._messages.get(event.incident_id):
+            # the opening message (or a new one if sending the opening failed: the incident must not be lost)
+            self._open(event.incident_id, text, event.keyframe)
         elif event.kind == "escalate" or (event.kind == "update" and event.merged):
-            for chat, mid in self._messages.get(event.incident_id, {}).items():
+            for chat, mid in self._messages[event.incident_id].items():
                 self._send(chat, text, event.keyframe, reply_to=mid)
             self._edit(event.incident_id, caption(_as_update(event)))
         elif event.kind == "update":
@@ -97,13 +96,16 @@ class TelegramNotifier:
         elif event.kind == "close":
             self._edit(event.incident_id, text, force=True)
         elif event.kind == "summary":
-            if event.incident_id in self._messages:
-                for chat, mid in self._messages[event.incident_id].items():
-                    self._post("editMessageText", {"chat_id": chat, "message_id": mid, "text": text})
-            else:
-                self._messages[event.incident_id] = {
-                    chat: mid for chat in self.chat_ids if (mid := self._send(chat, text, None)) is not None
-                }
+            self._edit(event.incident_id, text, force=True)
+
+    def _open(self, incident_id: str, text: str, photo: Path | None) -> None:
+        sent = {
+            chat: result for chat in self.chat_ids if (result := self._send(chat, text, photo)) is not None
+        }
+        if sent:
+            self._messages[incident_id] = {chat: mid for chat, (mid, _) in sent.items()}
+            self._photo[incident_id] = next(iter(sent.values()))[1]
+            self._last_edit[incident_id] = self._clock()
 
     def send_due_edits(self, force: bool = False) -> None:
         for incident_id, text in list(self._pending.items()):
@@ -125,18 +127,26 @@ class TelegramNotifier:
             return
         self._pending.pop(incident_id, None)
         for chat, mid in messages.items():
-            self._post("editMessageCaption", {"chat_id": chat, "message_id": mid, "caption": text})
+            if self._photo.get(incident_id, True):
+                self._post("editMessageCaption", {"chat_id": chat, "message_id": mid, "caption": text})
+            else:
+                self._post("editMessageText", {"chat_id": chat, "message_id": mid, "text": text})
         self._last_edit[incident_id] = self._clock()
 
-    def _send(self, chat: str, text: str, photo: Path | None, reply_to: int | None = None) -> int | None:
+    def _send(
+        self, chat: str, text: str, photo: Path | None, reply_to: int | None = None
+    ) -> tuple[int, bool] | None:
+        """(message id, has photo) or None; a rejected photo falls back to a text message."""
         data: dict = {"chat_id": chat}
         if reply_to is not None:
             data["reply_to_message_id"] = reply_to
+            data["allow_sending_without_reply"] = True  # the operator may have deleted the original
         if photo is not None and Path(photo).exists():
             result = self._post("sendPhoto", data | {"caption": text}, photo=Path(photo))
-        else:
-            result = self._post("sendMessage", data | {"text": text})
-        return None if result is None else result.get("message_id")
+            if result is not None:
+                return result.get("message_id"), True
+        result = self._post("sendMessage", data | {"text": text})
+        return None if result is None else (result.get("message_id"), False)
 
     def _post(self, method: str, data: dict, photo: Path | None = None) -> dict | None:
         url = f"{API}/bot{self._token}/{method}"
@@ -154,7 +164,7 @@ class TelegramNotifier:
                 if response.status_code == 200 and payload.get("ok"):
                     return payload.get("result", {})
                 if response.status_code == 429:
-                    wait = float(payload.get("parameters", {}).get("retry_after", wait))
+                    wait = min(float(payload.get("parameters", {}).get("retry_after", wait)), self.max_wait_s)
                 elif response.status_code < 500:
                     log.error("telegram %s rejected: %s", method, payload.get("description"))
                     return None

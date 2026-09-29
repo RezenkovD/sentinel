@@ -55,6 +55,7 @@ aggregator_a:               # A v0 — hand-set weights (training comes after th
   # A null feature takes its `neutral` value; explanations rank contributions against the neutral scene.
   bias: -1.5                # v0.1 (29.09): tuned on the sanity samples, see docs/DECISIONS.md
   clip: 5.0
+  reason_min_contribution: 0.25  # explanations name features that add at least this much to the logit
   weights:
     n_persons: 0.1
     crowd_motion: 0.8

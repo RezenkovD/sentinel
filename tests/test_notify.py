@@ -174,3 +174,45 @@ def test_without_a_token_notifications_go_to_the_console(tmp_path: Path):
     tg = make_notifier({"TELEGRAM_TOKEN": TOKEN, "TELEGRAM_CHAT_IDS": "42, 43"}, tmp_path / "i.jsonl")
     assert isinstance(tg, TelegramNotifier) and tg.chat_ids == ["42", "43"]
     tg.close()
+
+
+def test_incident_whose_opening_failed_is_sent_again_with_the_next_event(tmp_path: Path):
+    session = FakeSession(failures=8)  # photo and text fallback both fail (4 attempts each): opening lost
+    tg = _telegram(session)
+    tg.handle(_event("open", keyframe=_photo(tmp_path)))
+    assert session.calls == []
+    tg.handle(_event("escalate", t=15.0, keyframe=_photo(tmp_path), reason_uk="Зброя в руці: ніж"))
+    method, data, photo = session.calls[0]
+    assert method == "sendPhoto" and photo and "reply_to_message_id" not in data  # a fresh message
+    tg.handle(_event("close", t=45.0))
+    assert session.calls[-1][0] == "editMessageCaption"
+
+
+def test_text_only_incident_is_edited_as_text(tmp_path: Path):
+    session = FakeSession()
+    tg = _telegram(session)
+    tg.handle(_event("open", keyframe=None))  # no key frame: sent as a text message
+    tg.handle(_event("close", t=45.0))
+    assert [m for m, _, _ in session.calls] == ["sendMessage", "editMessageText"]
+    assert "Завершено" in session.calls[-1][1]["text"]
+
+
+def test_rate_limit_wait_is_capped():
+    class RateLimited(FakeSession):
+        def post(self, url, data=None, files=None, timeout=None):
+            if not self.calls and self.failures == 0:
+                self.failures = -1
+                return FakeResponse(429, {"ok": False, "parameters": {"retry_after": 900}})
+            return super().post(url, data, files, timeout)
+
+    waits = []
+    tg = TelegramNotifier(TOKEN, ["42"], session=RateLimited(), sleep=waits.append, start_worker=False)
+    tg.handle(_event("open", keyframe=None))
+    assert waits and max(waits) <= 60.0
+
+
+def test_rejected_photo_falls_back_to_a_text_message(tmp_path: Path):
+    session = FakeSession(failures=4)  # the photo upload keeps failing, the network then recovers
+    tg = _telegram(session)
+    tg.handle(_event("open", keyframe=_photo(tmp_path)))
+    assert [m for m, _, _ in session.calls] == ["sendMessage"]

@@ -167,3 +167,15 @@ def test_loading_weights_saved_for_other_features_fails(tmp_path: Path):
     path.write_text(path.read_text().replace('"weapon_held"', '"weapon_in_hand"'))
     with pytest.raises(ValueError):
         RulesAggregator.load(path, CONFIG)
+
+
+def test_reason_mentions_fast_motion_once():
+    scene = _scene(persons=[_person(1, speed=3.0, accel=1.0), _person(2, speed=2.0, accel=1.0)])
+    reason = _aggregator().assess(scene).reason_uk.lower()
+    assert reason.count("швидк") == 1
+
+
+def test_wrist_acceleration_at_pose_noise_level_is_not_given_as_a_reason():
+    # ~10 heights/s² is what pose jitter alone produces at 10 fps (sanity check, 29.09)
+    scene = _scene(persons=[_person(1, speed=0.1, accel=10.0), _person(2, speed=0.1, accel=10.0)])
+    assert "різкі рухи рук" not in _aggregator().assess(scene).reason_uk.lower()
