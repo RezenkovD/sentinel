@@ -22,6 +22,12 @@ from sentinel.pipeline import build_pipeline
 SEED = 2026
 
 
+def window_records(lines: list[str]) -> list[dict]:
+    """Parsed journal lines of analysis windows (the end-of-stream line carries no scene or risk)."""
+    records = [json.loads(line) for line in lines]
+    return [r for r in records if not r.get("stream_end")]
+
+
 def pick_clips(split: Path, per_class: int, seed: int = SEED) -> list[str]:
     """N Fight + N NonFight clips from our train part (fixed seed)."""
     train = json.loads(split.read_text())["train"]
@@ -127,8 +133,8 @@ def main(argv: list[str] | None = None) -> None:
             events += pipeline.finish()
             duration = reader.stats.received / reader.source_fps
         wall = time.perf_counter() - started
-        journal = journal_path.read_text(encoding="utf-8").splitlines()
-        risks = [json.loads(line)["risk"]["risk"] for line in journal[before:]]
+        windows = window_records(journal_path.read_text(encoding="utf-8").splitlines()[before:])
+        risks = [w["risk"]["risk"] for w in windows]
         rows.append(
             {
                 "clip": clip,
@@ -136,9 +142,7 @@ def main(argv: list[str] | None = None) -> None:
                 "incident": any(e.kind == "open" for e in events),
                 "events": [e.kind for e in events],
                 "risks": risks,
-                "weapon_windows": sum(
-                    json.loads(line)["scene"]["summary"]["weapon_visible"] for line in journal[before:]
-                ),
+                "weapon_windows": sum(w["scene"]["summary"]["weapon_visible"] for w in windows),
                 "max_risk": max(risks, default=0.0),
                 "rtf": round(wall / duration, 2),
             }
