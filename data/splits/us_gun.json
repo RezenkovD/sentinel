@@ -1,0 +1,43 @@
+{
+ "dataset": "us-gun (Sevilla mock attack, frames at 2 fps)",
+ "rule": "split by camera; file name prefix Cam<N>-",
+ "parts": {
+  "select": [
+   "Cam1",
+   "Cam5"
+  ],
+  "test": [
+   "Cam7"
+  ]
+ },
+ "frames": {
+  "select": 1638,
+  "test": 3511
+ },
+ "segments": {
+  "select": [
+   "Cam1-From09-23-00To10-03-25_Segment_0_x264",
+   "Cam1-From09-23-00To10-03-25_Segment_1_x264",
+   "Cam1-From09-23-00To10-03-25_Segment_2_x264",
+   "Cam1-From09-23-00To10-03-25_Segment_3_x264",
+   "Cam1-From09-23-00To10-03-25_Segment_4_x264",
+   "Cam1-From09-23-00To10-03-25_Segment_5_x264",
+   "Cam5-From09-24-18To09-26-43-Guns_x264_Segment_0_x264",
+   "Cam5-From09-24-18To09-26-43-Guns_x264_Segment_1_x264",
+   "Cam5-From09-27-50To09-29-30-Guns_x264",
+   "Cam5-From09-30-04To09-30-42-Guns_x264",
+   "Cam5-From09-32-26To09-33-10-Guns_x264",
+   "Cam5-From09-46-24To09-47-02_x264",
+   "Cam5-From09-47-49To09-48-30_x264"
+  ],
+  "test": [
+   "Cam7-From09-05-50To10-09-24_Segment_10_x264",
+   "Cam7-From09-05-50To10-09-24_Segment_11_x264",
+   "Cam7-From09-05-50To10-09-24_Segment_13_x264",
+   "Cam7-From09-05-50To10-09-24_Segment_6_x264",
+   "Cam7-From09-05-50To10-09-24_Segment_7_x264",
+   "Cam7-From09-05-50To10-09-24_Segment_8_x264",
+   "Cam7-From09-05-50To10-09-24_Segment_9_x264"
+  ]
+ }
+}

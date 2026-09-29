@@ -9,7 +9,7 @@
 
 | | |
 |---|---|
-| Роль | основний набір для агресії (бійка / не бійка): навчання A, тест усіх конфігурацій |
+| Роль | основний набір для агресії (бійка / не бійка). Поділ (рішення 29.09, `data/splits/rwf2000.json`): оригінальний `val` (400) — **наш тест**, до експерименту не чіпаємо; оригінальний `train` (1600) → наш train 1280 / val 320, стратифіковано за класом, цілими вихідними роликами (945 роликів), seed 2026 |
 | Офіційне джерело | https://github.com/mchengny/RWF2000-Video-Database-for-Violence-Detection — **відео офіційно недоступні** («Due to the privacy requirements, video files are currently not available»); запит авторам надіслано |
 | Використано | **дзеркало** Hugging Face `DanJoshua/RWF-2000`: https://huggingface.co/datasets/DanJoshua/RWF-2000, файл `RWF-2000.tar.gz` (12 315 601 005 Б), останнє оновлення дзеркала 2024-08-06 |
 | Умови | ліцензія авторів (README офіційного репозиторію): без дозволу SMIIP Lab не змінювати й не поширювати; не для комерційного використання; не використовувати на шкоду приватності; цитувати Cheng et al., ICPR 2020 (doi:10.1109/ICPR48806.2021.9412502). Картка дзеркала заявляє MIT — це заява третьої особи, вона не скасовує умов авторів |
@@ -20,7 +20,7 @@
 
 | | |
 |---|---|
-| Роль | довгі відео: затримка до тривоги, хибні тривоги на нормі (класи Fighting B1, Shooting B2) |
+| Роль | **лише тест** (для налаштування не використовується): довгі відео — затримка до тривоги, хибні тривоги на нормі; Fighting (B1); Shooting (B2) — відеосценарій «зброя» з приміткою «фільми / YouTube, не CCTV» |
 | Офіційне джерело | https://roc-ng.github.io/XD-Violence/ (Wu et al., ECCV 2020) |
 | Використано | **офіційні** посилання: тестові відео — OneDrive (SharePoint Xidian University), архів `videos.zip` (10 804 733 011 Б), завантажено з терміналу (curl з cookie сесії публічного посилання); розмітка тесту — https://roc-ng.github.io/XD-Violence/images/annotations.txt (499 рядків: назва відео + пари «початковий / кінцевий кадр» насильницьких подій), опис міток — https://roc-ng.github.io/XD-Violence/images/ReadMe.md |
 | Умови | ліцензію на сторінці не зазначено; відео зібрано з фільмів і YouTube — використовуємо лише для досліджень, не поширюємо; цитувати Wu et al., ECCV 2020 |
@@ -31,7 +31,7 @@
 
 | | |
 |---|---|
-| Роль | тест сценарію «зброя» |
+| Роль | покадрово (рішення 29.09): **Cam1 + Cam5** — вибір ваг і порогу детектора зброї; **Cam7 — відкладений тест** (його послідовності 2 кадри/с пізніше стануть епізодами сценарію «зброя»). Поділ — `data/splits/us_gun.json` |
 | Офіційне джерело | https://github.com/Deepknowledge-US/US-Real-time-gun-detection-in-CCTV-An-open-problem-dataset → сторінка https://deepknowledge-us.github.io/US-Real-time-gun-detection-in-CCTV-An-open-problem-dataset/ → Hugging Face `jsalazar/US-Real-time-gun-detection-in-CCTV-An-open-problem-dataset` (посилання зі сторінки авторів, тобто офіційне) |
 | Використано | «Mock attack dataset»: `weapons_images_2fps.zip` (1 485 МБ) — **кадри, розмічені з частотою 2 кадри/с** з камер Cam1 (607), Cam5 (1031), Cam7 (3511), рамки зброї. Відеофайлів у наборі немає. Синтетичний Unity-набір (U0.5 / U1 / U2.5 / U5) не завантажено — він потрібен лише для донавчання детектора |
 | Умови | CC BY-NC 4.0; безкоштовно для академічних досліджень із цитуванням Salazar González et al., Neural Networks, 2020 (doi:10.1016/j.neunet.2020.09.013); комерційне використання — лише за згодою авторів |
@@ -51,14 +51,16 @@
 ### Люди й поза (Ultralytics) → `weights/`
 
 Джерело — офіційні релізи Ultralytics: `https://github.com/ultralytics/assets/releases/download/v8.4.0/<файл>`.
-Ліцензія — AGPL-3.0 (Ultralytics). Завантажено 2026-09-28. Навчені на COCO (detect: 80 класів, використовуємо `person`; pose: 17 ключових точок).
+Завантажено 2026-09-28. Навчені на COCO (detect: 80 класів, використовуємо `person`; pose: 17 ключових точок).
+Ліцензію трактуємо як **AGPL-3.0** (рішення 29.09, `docs/DECISIONS.md`): так заявляє Ultralytics і так записано в самих
+чекпойнтах (поле `license`, прочитане статично з pickle без розпаковування).
 
-| Файл | Розмір, Б | sha256 |
-|---|---|---|
-| `yolo11n.pt` | 5 613 764 | `0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1` |
-| `yolo11n-pose.pt` | 6 255 593 | `869e83fcdffdc7371fa4e34cd8e51c838cc729571d1635e5141e3075e9319dc0` |
-| `yolo26n.pt` | 5 544 453 | `9b09cc8bf347f0fc8a5f7657480587f25db09b34bf33b0652110fb03a8ad4fef` |
-| `yolo26n-pose.pt` | 7 878 574 | `eb3bb8268828aeaf515cec23a4bfafd793944a86fe9af94ba7823609c14522a9` |
+| Файл | Розмір, Б | sha256 | Заявлено автором | У чекпойнті (Ultralytics, дата) | Використання |
+|---|---|---|---|---|---|
+| `yolo11n.pt` | 5 613 764 | `0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1` | AGPL-3.0 | `AGPL-3.0 License` (8.2.100, 2024-09-25) | лише bench сесії 01 |
+| `yolo11n-pose.pt` | 6 255 593 | `869e83fcdffdc7371fa4e34cd8e51c838cc729571d1635e5141e3075e9319dc0` | AGPL-3.0 | `AGPL-3.0 License` (8.2.100, 2024-09-25) | лише bench сесії 01 |
+| `yolo26n.pt` | 5 544 453 | `9b09cc8bf347f0fc8a5f7657480587f25db09b34bf33b0652110fb03a8ad4fef` | AGPL-3.0 | `AGPL-3.0` (8.3.222, 2025-12-15) | люди (дефолт з 29.09) |
+| `yolo26n-pose.pt` | 7 878 574 | `eb3bb8268828aeaf515cec23a4bfafd793944a86fe9af94ba7823609c14522a9` | AGPL-3.0 | `AGPL-3.0` (8.3.222, 2026-01-11) | поза (дефолт з 29.09) |
 
 ### Детектор зброї — кандидати → `weights/candidates/<назва>/`
 
@@ -66,13 +68,14 @@
 Докладно (URL із закріпленим комітом, train_args, дані, умови) — у `weights/candidates/<назва>/SOURCE.md`.
 Ваги не розпаковувались (не виконувався `torch.load`): статичний аналіз pickle (`pickletools`) — посилання лише на
 `torch.*`, `ultralytics.*`, `collections.OrderedDict`, `__builtin__.set`. Кожен чекпойнт Ultralytics містить
-автоматичне поле `license: AGPL-3.0`, що суперечить заявленій авторами MIT.
+автоматичне поле `license: AGPL-3.0`, що суперечить заявленій авторами MIT; за рішенням 29.09 трактуємо ваги як
+**AGPL-3.0** — у таблиці обидва поля.
 
-| Назва | Архітектура | Класи | Дані навчання | Заявлені метрики | Ліцензія ваг / даних | Розмір, Б | sha256 |
+| Назва | Архітектура | Класи | Дані навчання | Заявлені метрики | Ліцензія ваг: заявлено автором / у чекпойнті; ліцензія даних | Розмір, Б | sha256 |
 |---|---|---|---|---|---|---|---|
-| `hf-cosgun99-gun-knife-yolo11n` — https://huggingface.co/cosgun99/gun-knife-yolo11n (офіційне завантаження автора) | YOLO11n, 640, Ultralytics 8.4.46 | `gun`, `knife` | «custom merged», джерела не названо; 29 446 / 3 681 / 3 681 зображень | test mAP50 0,964, mAP50-95 0,698 | MIT (тег HF) / не зазначено | 5 474 259 | `07241a8fc57d0f3fd29231dd72b9f452375745290b2185440de0165590997cb5` |
-| `gh-halok600-weaponshield-yolov8s` — https://github.com/Halok600/WeaponShield-AI (репозиторій автора) | YOLOv8s, 640, Ultralytics 8.4.104 | `Pistol`, `Rifle`, `Knife` | ≈31,6 тис. зображень: два набори Roboflow Universe + 5 000 фонових COCO val2017 + 559 перерозмічених Kaggle | test mAP50 0,833, mAP50-95 0,613 (Pistol 0,908 / 0,691; Knife 0,636 / 0,405) | MIT (файл LICENSE) / Roboflow — CC BY 4.0 (не підтверджено, сторінки недоступні) | 22 489 763 | `0a96416a2f22cec4a3cc0232747a4ed98edb6fa6b4deb8978dd8c7ba7d944934` |
-| `hf-subh775-threat-detection-yolov8n` — https://huggingface.co/Subh775/Threat-Detection-YOLOv8n (офіційне завантаження автора) | YOLOv8n, 640, Ultralytics 8.3.205 | `Gun`, `explosion`, `grenade`, `knife` | неназваний набір Roboflow (Kaggle `threat-detection-3849`), ≈1,1 тис. анотацій Gun і ≈1,0 тис. knife | val mAP50 0,813, mAP50-95 0,553 | MIT (тег HF) / не зазначено | 6 251 747 | `86c43444ae8319d2276dd300edc3e7f7a1137fe7566737f994ca579ad770f6ce` |
+| `hf-cosgun99-gun-knife-yolo11n` — https://huggingface.co/cosgun99/gun-knife-yolo11n (офіційне завантаження автора) | YOLO11n, 640, Ultralytics 8.4.46 | `gun`, `knife` | «custom merged», джерела не названо; 29 446 / 3 681 / 3 681 зображень | test mAP50 0,964, mAP50-95 0,698 | MIT (тег HF) / `AGPL-3.0` (Ultralytics 8.4.46, 2026-05-25); дані — не зазначено | 5 474 259 | `07241a8fc57d0f3fd29231dd72b9f452375745290b2185440de0165590997cb5` |
+| `gh-halok600-weaponshield-yolov8s` — https://github.com/Halok600/WeaponShield-AI (репозиторій автора) | YOLOv8s, 640, Ultralytics 8.4.104 | `Pistol`, `Rifle`, `Knife` | ≈31,6 тис. зображень: два набори Roboflow Universe + 5 000 фонових COCO val2017 + 559 перерозмічених Kaggle | test mAP50 0,833, mAP50-95 0,613 (Pistol 0,908 / 0,691; Knife 0,636 / 0,405) | MIT (файл LICENSE) / `AGPL-3.0` (Ultralytics 8.4.104, 2026-08-17); дані — Roboflow CC BY 4.0 (не підтверджено, сторінки недоступні) | 22 489 763 | `0a96416a2f22cec4a3cc0232747a4ed98edb6fa6b4deb8978dd8c7ba7d944934` |
+| `hf-subh775-threat-detection-yolov8n` — https://huggingface.co/Subh775/Threat-Detection-YOLOv8n (офіційне завантаження автора) | YOLOv8n, 640, Ultralytics 8.3.205 | `Gun`, `explosion`, `grenade`, `knife` | неназваний набір Roboflow (Kaggle `threat-detection-3849`), ≈1,1 тис. анотацій Gun і ≈1,0 тис. knife | val mAP50 0,813, mAP50-95 0,553 | MIT (тег HF) / `AGPL-3.0` (Ultralytics 8.3.205, 2025-10-07); дані — не зазначено | 6 251 747 | `86c43444ae8319d2276dd300edc3e7f7a1137fe7566737f994ca579ad770f6ce` |
 
 Знайдено, але не завантажено: `0207yjy/Weapon_Detection_YOLO26n` (GitHub; YOLO26n 320 px на академічному наборі SOHAS,
 pistol / knife + схожі предмети, заявлено val mAP50 0,948; у репозиторії немає ліцензії) — найсильніший запасний кандидат;

@@ -43,6 +43,7 @@ torchvision = { index = "pytorch-cpu" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]  # the top-level eval/ scripts (SPEC §10) are importable in tests
 
 [tool.ruff]
 line-length = 110
