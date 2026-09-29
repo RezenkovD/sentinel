@@ -11,11 +11,13 @@ from sentinel.bench import (
     Measurement,
     PacedResult,
     PacedRow,
+    PowerState,
     Timing,
     append_paced_row,
     append_row,
     check_same_setup,
     clip_info,
+    read_power_state,
     render_table,
     run_measurement,
     run_paced,
@@ -94,6 +96,7 @@ def test_table_row_puts_each_value_in_its_column():
         "cpu",
         "640",
         "8",
+        "ac, performance",
         "30.0 / 35.0",
         "40.0 / 45.0",
         "70.0 / 80.0",
@@ -119,6 +122,7 @@ def _row(det: Timing = _ANY, pose: Timing = _ANY, total: Timing = _TOTAL) -> Ben
         threads=8,
         measurement=m,
         clips=["fight_a.avi"],
+        power=PowerState(source="ac", profile="performance"),
     )
 
 
@@ -185,11 +189,40 @@ def test_clip_info_reports_decodable_duration_of_a_truncated_file(tmp_path: Path
     assert not info.endswith("1.0 s")
 
 
-def test_report_refuses_to_mix_runs_on_different_clips_or_warmup(tmp_path: Path):
+def test_report_refuses_to_mix_runs_on_different_clips_warmup_or_power(tmp_path: Path):
     log = tmp_path / "bench.jsonl"
-    append_row(log, _row())  # measured on fight_a.avi with a 10-frame warm-up
-    check_same_setup([log, tmp_path / "no_such.paced.jsonl"], clips=["fight_a.avi"], warmup=10)
+    append_row(log, _row())  # fight_a.avi, 10-frame warm-up, on mains in the performance profile
+    ac = PowerState(source="ac", profile="performance")
+    check_same_setup([log, tmp_path / "no_such.paced.jsonl"], clips=["fight_a.avi"], warmup=10, power=ac)
     with pytest.raises(ValueError):
-        check_same_setup([log], clips=["nonfight_b.avi"], warmup=10)
+        check_same_setup([log], clips=["nonfight_b.avi"], warmup=10, power=ac)
     with pytest.raises(ValueError):
-        check_same_setup([log], clips=["fight_a.avi"], warmup=0)
+        check_same_setup([log], clips=["fight_a.avi"], warmup=0, power=ac)
+    with pytest.raises(ValueError):  # the same run on battery is about twice as slow
+        check_same_setup([log], clips=["fight_a.avi"], warmup=10, power=PowerState("battery", "balanced"))
+
+
+def _supply(root: Path, name: str, kind: str, online: str | None = None) -> None:
+    d = root / name
+    d.mkdir(parents=True)
+    (d / "type").write_text(kind + "\n")
+    if online is not None:
+        (d / "online").write_text(online + "\n")
+
+
+def test_power_state_reads_mains_adapter_and_profile(tmp_path: Path):
+    _supply(tmp_path, "BAT0", "Battery")
+    _supply(tmp_path, "ACAD", "Mains", online="1")
+    state = read_power_state(tmp_path, profile_cmd=["echo", "performance"])
+    assert state == PowerState(source="ac", profile="performance")
+
+
+def test_power_state_on_battery(tmp_path: Path):
+    _supply(tmp_path, "BAT0", "Battery")
+    _supply(tmp_path, "ACAD", "Mains", online="0")
+    assert read_power_state(tmp_path, profile_cmd=["echo", "balanced"]).source == "battery"
+
+
+def test_power_state_unknown_without_mains_adapter_or_profile_tool(tmp_path: Path):
+    state = read_power_state(tmp_path / "missing", profile_cmd=["no-such-profile-tool-xyz"])
+    assert state == PowerState(source="unknown", profile="unknown")

@@ -7,6 +7,7 @@ the whole clip (decoding every source frame + analysing the sampled ones) divide
 
 import json
 import platform
+import subprocess
 import time
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import asdict, dataclass, field
@@ -28,6 +29,41 @@ class Tracker(Protocol):
 
 class Poser(Protocol):
     def estimate(self, frame: np.ndarray, tracks: list[Track]) -> dict[int, np.ndarray]: ...
+
+
+@dataclass(frozen=True)
+class PowerState:
+    """Power source and profile during a run: on battery the same laptop is about twice as slow."""
+
+    source: str  # "ac", "battery" or "unknown"
+    profile: str  # power-profiles-daemon profile (performance / balanced / power-saver) or "unknown"
+
+    def __str__(self) -> str:
+        return f"{self.source}, {self.profile}"
+
+
+UNKNOWN_POWER = PowerState("unknown", "unknown")
+
+
+def read_power_state(
+    supply_root: Path = Path("/sys/class/power_supply"),
+    profile_cmd: Sequence[str] = ("powerprofilesctl", "get"),
+) -> PowerState:
+    source = "unknown"
+    supplies = sorted(supply_root.iterdir()) if supply_root.is_dir() else []
+    for supply in supplies:
+        try:
+            if (supply / "type").read_text().strip() == "Mains":
+                source = "ac" if (supply / "online").read_text().strip() == "1" else "battery"
+                break
+        except OSError:
+            continue
+    try:
+        done = subprocess.run(list(profile_cmd), capture_output=True, text=True, timeout=5, check=True)
+        profile = done.stdout.strip() or "unknown"
+    except (OSError, subprocess.SubprocessError):
+        profile = "unknown"
+    return PowerState(source, profile)
 
 
 @dataclass(frozen=True)
@@ -60,6 +96,7 @@ class BenchRow:
     measurement: Measurement
     clips: list[str] = field(default_factory=list)
     warmup: int = 10
+    power: PowerState = UNKNOWN_POWER
 
     @property
     def max_fps(self) -> float:
@@ -151,6 +188,7 @@ class PacedRow:
     result: PacedResult
     clips: list[str] = field(default_factory=list)
     warmup: int = 10
+    power: PowerState = UNKNOWN_POWER
 
 
 def run_paced(
@@ -189,6 +227,7 @@ def render_table(rows: Sequence[BenchRow]) -> str:
             "device",
             "imgsz",
             "threads",
+            "power",
             "det+track, ms",
             "pose, ms",
             "total, ms",
@@ -206,6 +245,7 @@ def render_table(rows: Sequence[BenchRow]) -> str:
             row.device,
             str(row.imgsz),
             "—" if row.threads is None else str(row.threads),
+            str(row.power),
             f"{m.det.mean_ms:.1f} / {m.det.p95_ms:.1f}",
             f"{m.pose.mean_ms:.1f} / {m.pose.p95_ms:.1f}",
             f"{m.total.mean_ms:.1f} / {m.total.p95_ms:.1f}",
@@ -224,6 +264,7 @@ def render_paced_table(rows: Sequence[PacedRow]) -> str:
         "backend",
         "imgsz",
         "threads",
+        "power",
         "target fps",
         "effective fps",
         "analysed / received",
@@ -239,6 +280,7 @@ def render_paced_table(rows: Sequence[PacedRow]) -> str:
             row.backend,
             str(row.imgsz),
             "—" if row.threads is None else str(row.threads),
+            str(row.power),
             f"{r.target_fps:g}",
             f"{r.effective_fps:.1f}",
             f"{r.delivered} / {r.received}",
@@ -253,7 +295,8 @@ def render_paced_table(rows: Sequence[PacedRow]) -> str:
 def paced_row_from_json(data: dict) -> PacedRow:
     r = data.pop("result")
     latency = Timing(**r.pop("latency"))
-    return PacedRow(result=PacedResult(latency=latency, **r), **data)
+    power = PowerState(**data.pop("power")) if "power" in data else UNKNOWN_POWER
+    return PacedRow(result=PacedResult(latency=latency, **r), power=power, **data)
 
 
 def _append_jsonl(jsonl: Path, row: BenchRow | PacedRow) -> list[dict]:
@@ -279,18 +322,19 @@ def row_from_json(data: dict) -> BenchRow:
         pose_coverage=m["pose_coverage"],
         rtf={float(k): v for k, v in m["rtf"].items()},
     )
-    return BenchRow(measurement=measurement, **data)
+    power = PowerState(**data.pop("power")) if "power" in data else UNKNOWN_POWER
+    return BenchRow(measurement=measurement, power=power, **data)
 
 
-def check_same_setup(logs: Sequence[Path], clips: list[str], warmup: int) -> None:
-    """Refuse to add a run to a report whose logged rows were measured on other clips or warm-up."""
+def check_same_setup(logs: Sequence[Path], clips: list[str], warmup: int, power: PowerState) -> None:
+    """Refuse to add a run to a report whose rows were measured on other clips, warm-up or power state."""
     for log in logs:
         for row in _read_jsonl(log):
-            if row.get("clips") != clips or row.get("warmup", 10) != warmup:
+            logged = (row.get("clips"), row.get("warmup", 10), row.get("power", asdict(UNKNOWN_POWER)))
+            if logged != (clips, warmup, asdict(power)):
                 raise ValueError(
-                    f"{log} already holds rows measured on {row.get('clips')} with warm-up "
-                    f"{row.get('warmup', 10)}; mixing runs would put them under one clip list — "
-                    "pass another --out"
+                    f"{log} already holds rows measured on {logged[0]} with warm-up {logged[1]} and power "
+                    f"{logged[2]}; mixing incomparable runs in one table — pass another --out"
                 )
 
 
@@ -407,7 +451,8 @@ def run_bench(
 
     jsonl, paced_jsonl = out.with_suffix(".jsonl"), out.with_suffix(".paced.jsonl")
     clips = [s.name for s in sources]
-    check_same_setup([jsonl, paced_jsonl], clips, warmup)
+    power = read_power_state()
+    check_same_setup([jsonl, paced_jsonl], clips, warmup, power)
 
     model = (
         det_weights.stem
@@ -437,12 +482,12 @@ def run_bench(
             poser = PoseEstimator(pose_weights, imgsz=imgsz, conf=pose_conf, rules=pose_rules, device=device)
             if paced_fps is None:
                 m = run_measurement(sources, tracker, poser, fps_list, warmup, after_warmup=after_warmup)
-                row = BenchRow(model, label, device, imgsz, threads_used(), m, clips, warmup)
+                row = BenchRow(model, label, device, imgsz, threads_used(), m, clips, warmup, power)
                 append_row(jsonl, row)
                 print(render_table([row]), flush=True)
             else:
                 r = run_paced(sources, tracker, poser, paced_fps, warmup, after_warmup=after_warmup)
-                paced_row = PacedRow(model, label, device, imgsz, threads_used(), r, clips, warmup)
+                paced_row = PacedRow(model, label, device, imgsz, threads_used(), r, clips, warmup, power)
                 append_paced_row(paced_jsonl, paced_row)
                 print(render_paced_table([paced_row]), flush=True)
             rows = [row_from_json(d) for d in _read_jsonl(jsonl)]
