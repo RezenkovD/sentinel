@@ -21,14 +21,32 @@ cp .env.example .env    # секрети (токен бота, ключ LLM) —
 ## Запуск
 
 ```bash
-uv run sentinel bench --source <clip>.avi [<clip>.avi …]   # замір швидкості (RTF, мс/кадр)
-uv run sentinel bench --paced --source <clip>.avi          # те саме в темпі живої камери
-uv run sentinel run --source 0                                          # вебкамера (ще не реалізовано)
-uv run sentinel run --source video.mp4 --paced                          # відеофайл у темпі живої камери (ще не реалізовано)
-uv run sentinel eval --config all                                       # експеримент (ще не реалізовано)
+uv run sentinel run --source video.mp4 --paced     # відеофайл у темпі живої камери (демонстрація)
+uv run sentinel run --source video.mp4             # відеофайл без пауз (offline)
+uv run sentinel run --source 0                     # вебкамера; також rtsp://…
 ```
 
-Налаштування (частота аналізу, розмір входу, пороги) — `configs/default.yaml`, трекер — `configs/bytetrack.yaml`.
+`sentinel run` пише журнал вікон у `results/run_<час>.jsonl`, ключові кадри інцидентів — у `results/incidents/<id>/`.
+Без `TELEGRAM_TOKEN` і `TELEGRAM_CHAT_IDS` у `.env` сповіщення йдуть у консоль і `results/incidents.jsonl`.
+Демонстрацію й заміри запускати лише від мережі, у профілі `powerprofilesctl set performance`.
+
+Заміри й перевірки:
+
+```bash
+uv run sentinel bench --source <clip>.avi [<clip>.avi …]            # люди + поза: мс/кадр, RTF
+uv run sentinel bench --paced --source <clip>.avi                   # те саме в темпі живої камери
+uv run sentinel bench --pipeline 480:1 640:2 crops320:2 --source …  # повний конвеєр; варіанти детектора зброї
+uv run --with openvino sentinel bench --pipeline 480:1 --format openvino --source …   # те саме на OpenVINO
+uv run python -m eval.build_episodes        # поділи наборів → data/splits/
+uv run python -m eval.weapons               # вибір ваг детектора зброї на кадрах Севільї
+uv run python -m eval.sanity --per-class 20 # санітарна перевірка конвеєра на нашому train RWF
+uv run python -m eval.sanity --make-videos  # склейки для перевірки в темпі камери (потрібен ffmpeg)
+```
+
+Експеримент (`sentinel eval`) ще не реалізовано.
+
+Налаштування (частота аналізу, розмір входу, пороги, ваги A, автомат інцидентів) — `configs/default.yaml`,
+трекер — `configs/bytetrack.yaml`, зони — `configs/zones.yaml`. Журнал рішень — [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 Ultralytics не встановлює пакети сам: `sentinel` вимикає це (`YOLO_AUTOINSTALL=false`), усі залежності —
 лише з `uv.lock`; відсутні ваги не завантажуються автоматично — див. `data/SOURCES.md`.
