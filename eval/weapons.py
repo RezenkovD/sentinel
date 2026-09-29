@@ -24,6 +24,7 @@ from pathlib import Path
 import numpy as np
 
 from sentinel.agents.pose_features import iou_matrix
+from sentinel.agents.weapons import person_crop
 
 GT_CLASS_MAP = {"handgun": "gun", "short_rifle": "gun", "knife": "knife"}
 CANDIDATE_CLASS_MAP = {"pistol": "gun", "rifle": "gun", "gun": "gun", "knife": "knife"}
@@ -107,18 +108,6 @@ def frame_rates(
         false = sum(best.get(f, 0.0) >= t for f in empty) / len(empty)
         rates.append((t, recall, false))
     return rates
-
-
-def person_crop(
-    box: tuple[float, float, float, float], frame_shape: tuple[int, int], pad: float
-) -> tuple[int, int, int, int]:
-    """Square around a person box, side = longer box side x (1 + pad), shifted (not cut) to stay inside."""
-    h_img, w_img = frame_shape[:2]
-    cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
-    side = min(int(round(max(box[2] - box[0], box[3] - box[1]) * (1 + pad))), w_img, h_img)
-    x1 = min(max(int(round(cx - side / 2)), 0), w_img - side)
-    y1 = min(max(int(round(cy - side / 2)), 0), h_img - side)
-    return x1, y1, x1 + side, y1 + side
 
 
 def merge_detections(detections: Iterable[Detection], iou_threshold: float) -> list[Detection]:

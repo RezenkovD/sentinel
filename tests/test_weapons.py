@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from sentinel.agents.weapons import WeaponBox, WeaponDetector, map_class
+from sentinel.agents.weapons import WeaponBox, WeaponDetector, crops_run, map_class
 
 CLASS_MAP = {"pistol": "gun", "rifle": "gun", "gun": "gun", "knife": "knife"}
 
@@ -27,7 +27,7 @@ class CountingModel:
     def __init__(self) -> None:
         self.calls = 0
 
-    def __call__(self, frame: np.ndarray) -> list[WeaponBox]:
+    def __call__(self, frame: np.ndarray, people=()) -> list[WeaponBox]:
         self.calls += 1
         return [WeaponBox("gun", (0.0, 0.0, 10.0, 10.0), conf=self.calls / 10)]
 
@@ -62,3 +62,33 @@ def test_reset_forgets_boxes_and_restarts_the_schedule():
 def test_invalid_schedule_is_rejected():
     with pytest.raises(ValueError):
         WeaponDetector(CountingModel(), every_n_frames=0)
+
+
+def test_crop_mode_runs_the_model_around_each_person_and_maps_boxes_back():
+    seen_shapes = []
+
+    def predict(image: np.ndarray) -> list[WeaponBox]:
+        seen_shapes.append(image.shape[:2])
+        return [WeaponBox("knife", (10.0, 20.0, 30.0, 40.0), 0.7)]  # in crop coordinates
+
+    run = crops_run(predict, pad=0.25)
+    frame = np.zeros((1080, 1920, 3), dtype=np.uint8)
+    boxes = run(frame, [(900.0, 400.0, 1000.0, 600.0)])
+    assert seen_shapes == [(250, 250)]  # padded square around the 100 x 200 person
+    assert boxes == [WeaponBox("knife", (835.0, 395.0, 855.0, 415.0), 0.7)]  # crop origin (825, 375)
+
+
+def test_crop_mode_keeps_one_box_for_a_weapon_seen_from_two_overlapping_crops():
+    def predict(image: np.ndarray) -> list[WeaponBox]:
+        return [WeaponBox("gun", (0.0, 0.0, 40.0, 40.0), 0.6)]
+
+    run = crops_run(predict, pad=0.0)
+    frame = np.zeros((500, 500, 3), dtype=np.uint8)
+    # two people whose squares both start at the frame corner, so both crops see the same gun
+    boxes = run(frame, [(0.0, 0.0, 100.0, 100.0), (0.0, 0.0, 90.0, 100.0)])
+    assert len(boxes) == 1
+
+
+def test_crop_mode_without_people_finds_nothing():
+    run = crops_run(lambda image: [WeaponBox("gun", (0.0, 0.0, 1.0, 1.0), 0.9)], pad=0.25)
+    assert run(np.zeros((10, 10, 3), dtype=np.uint8), []) == []

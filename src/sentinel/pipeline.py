@@ -1,1 +1,230 @@
-"""Pipeline: wires the agents together and tracks real-time metrics (RTF, analysis rate, dropped frames)."""
+"""Pipeline: frame -> people + tracks -> pose -> weapons -> scene per window -> A -> incidents -> notifier.
+
+Each closed window writes one journal line (results/run_<time>.jsonl): the scene description, A's risk, the
+incident state, the age of the window's last frame and the processing time spent on the window.
+"""
+
+import json
+import time
+from collections import defaultdict
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Protocol
+
+import numpy as np
+
+from sentinel.agents.context import ZoneContext
+from sentinel.agents.detector import Track
+from sentinel.agents.weapons import WeaponBox
+from sentinel.config import Config
+from sentinel.incidents import IncidentEvent, IncidentManager, KeyframeSaver
+from sentinel.io.source import Frame
+from sentinel.keyframe import Snapshot
+from sentinel.notify import Notifier
+from sentinel.scene import SceneBuilder
+from sentinel.schema import RiskResult, SceneDescription, Zone
+
+
+class Aggregator(Protocol):
+    def assess(self, scene: SceneDescription) -> RiskResult: ...
+
+
+@dataclass
+class Agents:
+    people: Any  # update(image) -> list[Track]; reset()
+    poser: Any  # estimate(image, tracks) -> {track_id: keypoints}
+    weapons: Any  # detect(image, people boxes) -> list[WeaponBox]; reset()
+
+
+@dataclass
+class _Window:
+    """What the pipeline keeps about the window being filled."""
+
+    snapshot: Snapshot | None = None
+    rank: tuple[int, int] = (-1, -1)
+    timing_ms: dict[str, float] = field(default_factory=lambda: defaultdict(float))
+    frames: int = 0
+    last_age_s: float | None = None
+
+    def add(
+        self,
+        frame: Frame,
+        tracks: list[Track],
+        skeletons: dict[int, np.ndarray],
+        weapons: list[WeaponBox],
+        timing_ms: dict[str, float],
+        age_s: float | None,
+    ) -> None:
+        rank = (int(bool(weapons)), len(tracks))  # prefer a frame showing a weapon, then the most people
+        if rank >= self.rank:
+            self.rank = rank
+            self.snapshot = Snapshot(frame.image, tracks, skeletons, weapons)
+        for stage, ms in timing_ms.items():
+            self.timing_ms[stage] += ms
+        self.frames += 1
+        self.last_age_s = age_s
+
+
+class Pipeline:
+    def __init__(
+        self,
+        agents: Agents,
+        aggregator: Aggregator,
+        notifier: Notifier,
+        config: Config,
+        source_id: str,
+        run_id: str,
+        journal: Path | None,
+        keyframes: KeyframeSaver,
+        zone: Zone | None = None,
+    ) -> None:
+        self.agents, self.aggregator, self.notifier, self.config = agents, aggregator, notifier, config
+        self.source_id, self.keyframes = source_id, keyframes
+        self.journal = Path(journal) if journal is not None else None
+        if self.journal is not None:
+            self.journal.parent.mkdir(parents=True, exist_ok=True)
+        self.zone = zone or ZoneContext.from_yaml(config.context.zones).zone_for(source_id)
+        self.reset(run_id)
+
+    def reset(self, run_id: str) -> None:
+        """Start a new stream (e.g. the next clip): fresh tracks, windows and incident state."""
+        self.agents.people.reset()
+        self.agents.weapons.reset()
+        cfg = self.config
+        self.builder = SceneBuilder(
+            cfg.features.to_feature_config(), cfg.analysis.window_s, self.source_id, self.zone
+        )
+        self.incidents = IncidentManager(cfg.incidents, self.source_id, self.keyframes, run_id)
+        self._window = _Window()
+        self.windows = 0
+
+    def process(self, frame: Frame, age_s: float | None = None) -> list[IncidentEvent]:
+        timing: dict[str, float] = {}
+        started = time.perf_counter()
+        tracks = self.agents.people.update(frame.image)
+        timing["people"] = _ms_since(started)
+        started = time.perf_counter()
+        skeletons = self.agents.poser.estimate(frame.image, tracks)
+        timing["pose"] = _ms_since(started)
+        started = time.perf_counter()
+        weapons = self.agents.weapons.detect(frame.image, [t.box for t in tracks])
+        timing["weapons"] = _ms_since(started)
+        started = time.perf_counter()
+        scene = self.builder.add(frame.t, tracks, skeletons, weapons)
+        timing["scene"] = _ms_since(started)
+        events = []
+        if scene is not None:
+            events = self._close_window(scene)
+            self._window = _Window()  # this frame opens the next window
+        self._window.add(frame, tracks, skeletons, weapons, timing, age_s)
+        return events
+
+    def finish(self) -> list[IncidentEvent]:
+        """End of the stream: close the last window."""
+        scene = self.builder.flush()
+        return self._close_window(scene) if scene is not None else []
+
+    def _close_window(self, scene: SceneDescription) -> list[IncidentEvent]:
+        started = time.perf_counter()
+        risk = self.aggregator.assess(scene)
+        events = self.incidents.on_window(scene.window.t_end, risk, scene, self._window.snapshot)
+        decision_ms = _ms_since(started)
+        for event in events:
+            self.notifier.on_event(event)
+        self.windows += 1
+        if self.journal is not None:
+            timing = {k: round(v, 1) for k, v in self._window.timing_ms.items()}
+            timing |= {"decision": round(decision_ms, 1), "frames": self._window.frames}
+            line = {
+                "t": scene.window.t_end,
+                "scene": scene.model_dump(mode="json"),
+                "risk": risk.model_dump(mode="json"),
+                "state": self.incidents.state.value,
+                "frame_age_s": None if self._window.last_age_s is None else round(self._window.last_age_s, 3),
+                "timing_ms": timing,
+                "events": [e.kind for e in events],
+            }
+            with self.journal.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(line, ensure_ascii=False) + "\n")
+        return events
+
+
+def _ms_since(started: float) -> float:
+    return (time.perf_counter() - started) * 1000
+
+
+def build_pipeline(
+    config: Config, source_id: str, run_id: str, journal: Path | None, notifier: Notifier
+) -> Pipeline:
+    """The real pipeline: YOLO people + ByteTrack, YOLO-pose, weapon detector, aggregator A, key frames."""
+    from sentinel.agents.detector import PersonTracker
+    from sentinel.agents.pose_features import MatchRules, PoseEstimator
+    from sentinel.agents.weapons import WeaponDetector
+    from sentinel.aggregators.rules import RulesAggregator
+    from sentinel.keyframe import KeyframeWriter
+
+    m, w, pose = config.models, config.weapons, config.models.pose
+    agents = Agents(
+        people=PersonTracker(m.person.weights, m.imgsz, m.person.conf, m.person.tracker, m.device),
+        poser=PoseEstimator(
+            pose.weights,
+            m.imgsz,
+            pose.conf,
+            MatchRules(pose.min_iou, pose.min_inside, pose.keypoint_conf, pose.box_margin),
+            m.device,
+        ),
+        weapons=WeaponDetector.from_weights(
+            w.weights, w.imgsz, w.conf, w.every_n_frames, w.class_map, w.mode, w.crop_pad, m.device
+        ),
+    )
+    keyframes = KeyframeWriter(config.incidents.output_dir, config.incidents.blur_faces)
+    aggregator = RulesAggregator.from_config(config)
+    return Pipeline(agents, aggregator, notifier, config, source_id, run_id, journal, keyframes)
+
+
+def run_source(config: Config, source: str, paced: bool, results: Path = Path("results")) -> dict:
+    """`sentinel run`: a camera / RTSP stream (live) or a file (paced or offline) until it ends or Ctrl+C."""
+    import os
+
+    from dotenv import load_dotenv
+
+    from sentinel.io.source import LatestFrameReader
+    from sentinel.notify import make_notifier
+
+    load_dotenv()
+    run_id = time.strftime("%Y%m%d-%H%M%S")
+    live = source.isdigit() or "://" in source
+    mode = "live" if live else "paced" if paced else "offline"
+    notifier = make_notifier(os.environ, config.notify.incidents_jsonl, config.notify.edit_interval_s)
+    journal = results / f"run_{run_id}.jsonl"
+    pipeline = build_pipeline(config, config.source.camera_id, run_id, journal, notifier)
+    reader = LatestFrameReader(source, mode, target_fps=config.analysis.fps)
+    incidents: set[str] = set()
+    frames = 0
+    started = time.monotonic()  # the reader's own clock starts on the first read, right below
+    try:
+        try:
+            for frame in reader:
+                age = None if mode == "offline" else time.monotonic() - started - frame.t
+                incidents |= {e.incident_id for e in pipeline.process(frame, age)}
+                frames += 1
+        except KeyboardInterrupt:
+            pass
+        incidents |= {e.incident_id for e in pipeline.finish()}
+    finally:
+        reader.close()
+        notifier.close()
+    wall = time.monotonic() - started
+    stats = reader.stats
+    summary = {
+        "mode": mode,
+        "journal": str(journal),
+        "frames_analysed": frames,
+        "windows": pipeline.windows,
+        "incidents": sorted(incidents),
+        "wall_s": round(wall, 1),
+        "skipped_share": round(stats.skipped / stats.received, 3) if stats.received else None,
+    }
+    if not live and reader.source_fps > 0 and stats.received:
+        summary["rtf"] = round(wall / (stats.received / reader.source_fps), 2)
+    return summary

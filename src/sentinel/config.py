@@ -48,6 +48,21 @@ class ModelsConfig(_Section):
     pose: PoseModelConfig
 
 
+class WeaponsConfig(_Section):
+    weights: Path
+    mode: Literal["frame", "crops"]
+    imgsz: int = Field(gt=0)
+    conf: float = Field(ge=0, le=1)
+    every_n_frames: int = Field(ge=1, le=2)
+    crop_pad: float = Field(ge=0)
+    class_map: dict[str, Literal["gun", "knife"]]
+
+
+class NotifyConfig(_Section):
+    incidents_jsonl: Path
+    edit_interval_s: float = Field(ge=0)
+
+
 class FeaturesConfig(_Section):
     min_keypoint_conf: float = Field(ge=0, le=1)
     hold_margin_h: float = Field(ge=0)
@@ -105,6 +120,8 @@ class Config(_Section):
     source: SourceConfig
     analysis: AnalysisConfig
     models: ModelsConfig
+    weapons: WeaponsConfig
+    notify: NotifyConfig
     features: FeaturesConfig
     context: ContextConfig
     aggregator_a: AggregatorAConfig

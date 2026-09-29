@@ -13,7 +13,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--config", type=Path, default=DEFAULT_CONFIG, help="YAML config (default: %(default)s)"
     )
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("run", help="run the pipeline on a camera, RTSP stream or video file")
+    run = sub.add_parser("run", help="run the pipeline on a camera, RTSP stream or video file")
+    run.add_argument("--source", required=True, help="video file, camera index (e.g. 0) or rtsp:// URL")
+    run.add_argument("--paced", action="store_true", help="play a file at its own speed, like a live camera")
     sub.add_parser("eval", help="run the experiment on dataset episodes")
 
     bench = sub.add_parser("bench", help="measure processing speed (ms/frame, RTF)")
@@ -37,6 +39,13 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     config = load_config(args.config)
+    if args.command == "run":
+        import json
+
+        from sentinel.pipeline import run_source
+
+        print(json.dumps(run_source(config, args.source, args.paced), ensure_ascii=False))
+        return 0
     if args.command == "bench":
         from sentinel.agents.pose_features import MatchRules
         from sentinel.bench import run_bench
