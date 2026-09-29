@@ -53,17 +53,17 @@ context:
 aggregator_a:               # A v0 — hand-set weights (training comes after the episodes are built)
   # risk = sigmoid(bias + Σ weights[f] · clip((x_f − mean_f) / scale[f], ±clip)); mean = 0 for hand-set weights.
   # A null feature takes its `neutral` value; explanations rank contributions against the neutral scene.
-  bias: -2.5
+  bias: -1.5                # v0.1 (29.09): tuned on the sanity samples, see docs/DECISIONS.md
   clip: 5.0
   weights:
     n_persons: 0.1
-    crowd_motion: 0.3
-    max_speed: 0.3
-    max_limb_accel: 1.2
+    crowd_motion: 0.8
+    max_speed: 0.8
+    max_limb_accel: 0.4
     min_distance_h: -1.0
     max_approach_speed: 0.6
     facing_close: 0.5
-    max_contact_s: 0.6
+    max_contact_s: 0.0      # calm groups stand close longer than fighters (window AUC 0.40)
     n_close_pairs: 0.3
     weapon_visible: 0.8
     weapon_held: 2.0

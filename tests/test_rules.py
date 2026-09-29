@@ -105,9 +105,9 @@ def test_missing_feature_becomes_neutral_value_with_an_indicator():
             _scene(interactions=[_pair(d=0.8, approach=0.0)]),
             _scene(interactions=[_pair(d=0.8, approach=1.5)]),
         ),
-        (_scene(interactions=[_pair(d=0.8, contact=0.0)]), _scene(interactions=[_pair(d=0.8, contact=4.0)])),
     ],
-    ids=["wrist acceleration", "distance", "approach speed", "contact duration"],
+    # contact duration is not a sign of aggression on RWF windows (weight 0 since 29.09, docs/DECISIONS.md)
+    ids=["wrist acceleration", "distance", "approach speed"],
 )
 def test_risk_grows_with_signs_of_aggression(calm: SceneDescription, tense: SceneDescription):
     a = _aggregator()
