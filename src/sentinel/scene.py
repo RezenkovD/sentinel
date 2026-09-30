@@ -21,6 +21,7 @@ from sentinel.agents.features import (
     distance_series,
     facing,
     height,
+    hold_conf,
     holds,
     person_speed,
     plausible,
@@ -53,6 +54,9 @@ class SceneBuilder:
         self._context: list[FrameRecord] = []  # last frames of the previous window, for the keypoint fits
         self._window_start: float | None = None
         self._contacts = ContactTracker(cfg.contact_distance_h)
+        # per person of the last window: the highest weapon score at which `holds` would still be true
+        # (service data for choosing a detector threshold on a cache; not in the scene description)
+        self.last_hold_confs: dict[int, float] = {}
 
     def add(
         self,
@@ -112,6 +116,8 @@ class SceneBuilder:
             )
 
         persons = tuple(person(tid, obs) for tid, obs in sorted(observations.items()))
+        levels = {tid: hold_conf(obs, runs, heights[tid], cfg) for tid, obs in observations.items()}
+        self.last_hold_confs = {tid: level for tid, level in sorted(levels.items()) if level is not None}
 
         series = {}
         for a, b in combinations(sorted(observations), 2):

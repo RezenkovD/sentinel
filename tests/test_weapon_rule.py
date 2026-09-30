@@ -51,3 +51,29 @@ def test_share_of_normal_clips_with_a_false_alarm():
     noisy = _episode([(2,), (2,), ()], label=0)
     assert alarm_share(calm + [noisy], windows=2) == pytest.approx(0.25)
     assert alarm_share(calm + [_episode([(2,), (), ()], label=0)], windows=2) == 0.0
+
+
+def test_a_higher_detector_threshold_drops_the_holds_scored_below_it():
+    """Decision 30.09 (report 03, item 4): the cache's aux keeps each holder's threshold, so one extraction
+    answers every higher detector threshold."""
+    from sentinel.eval.weapon_rule import at_threshold
+
+    episode = _episode([(1,), (1,), (1, 2)], labels=[1, 1, 1])
+    levels = [{"1": 0.9}, {"1": 0.55}, {"1": 0.8, "2": 0.45}]
+    episode = CachedEpisode(
+        episode.meta,
+        episode.scenes,
+        [a | {"hold_confs": h} for a, h in zip(episode.aux, levels, strict=True)],
+    )
+    holders = [[p.id for p in s.persons if p.holds] for s in at_threshold(episode, 0.5).scenes]
+    assert holders == [[1], [1], [1]]
+    holders = [[p.id for p in s.persons if p.holds] for s in at_threshold(episode, 0.6).scenes]
+    assert holders == [[1], [], [1]]
+    assert weapon_alarms(at_threshold(episode, 0.6).scenes, windows=2) == [False, False, False]
+
+
+def test_a_cache_without_hold_thresholds_cannot_be_swept():
+    from sentinel.eval.weapon_rule import at_threshold
+
+    with pytest.raises(KeyError, match="hold_confs"):
+        at_threshold(_episode([(1,)], labels=[1]), 0.5)

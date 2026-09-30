@@ -83,28 +83,56 @@ def holds(
     while the person was in view, and in at least one: 2 of 5 runs at 10 frames/s with the detector on every
     2nd frame, 1 of 2 on the 2-frames/s Sevilla sequences.
     """
-    margin = cfg.hold_margin_h * h
-    seen = [o for o in obs if o.t in runs]
+    seen, need, at_wrist = _hold_runs(obs, runs, h, cfg)
     counts: dict[str, int] = {}
-    for o in seen:
-        wrists = [p for w in (LEFT_WRIST, RIGHT_WRIST) if (p := _point(o, w, cfg)) is not None]
-        kinds = {
-            weapon.kind
-            for weapon in runs[o.t]
-            if plausible(weapon, h, cfg)
-            and any(
-                weapon.box[0] - margin <= x <= weapon.box[2] + margin
-                and weapon.box[1] - margin <= y <= weapon.box[3] + margin
-                for x, y in wrists
-            )
-        }
+    for kinds in at_wrist:
         for kind in kinds:
             counts[kind] = counts.get(kind, 0) + 1
-    need = max(1, math.ceil(cfg.hold_min_share * len(seen) - 1e-9))
     held = [k for k, n in counts.items() if n >= need]
     if not held:
         return None
     return max(held, key=lambda k: (counts[k], k == "gun"))
+
+
+def hold_conf(
+    obs: Sequence[Observation], runs: dict[float, list[WeaponBox]], h: float, cfg: FeatureConfig
+) -> float | None:
+    """The highest detector confidence at which `holds` still finds a weapon at this person's wrist.
+
+    For choosing a detector threshold on a cache (decision 30.09, report 03, item 4): `holds` over the boxes
+    of confidence >= τ is true exactly when hold_conf >= τ, for every τ at or above the confidence the boxes
+    were kept at. Service data only (the episode cache's aux) — not part of the scene description.
+    """
+    seen, need, at_wrist = _hold_runs(obs, runs, h, cfg)
+    per_kind: dict[str, list[float]] = {}
+    for kinds in at_wrist:
+        for kind, conf in kinds.items():
+            per_kind.setdefault(kind, []).append(conf)
+    levels = [sorted(confs, reverse=True)[need - 1] for confs in per_kind.values() if len(confs) >= need]
+    return max(levels) if levels else None
+
+
+def _hold_runs(
+    obs: Sequence[Observation], runs: dict[float, list[WeaponBox]], h: float, cfg: FeatureConfig
+) -> tuple[list[Observation], int, list[dict[str, float]]]:
+    """Runs made while the person was in view, how many of them a hold needs, and per run the best score of
+    every weapon kind whose (expanded, plausible) box has a confident wrist inside."""
+    margin = cfg.hold_margin_h * h
+    seen = [o for o in obs if o.t in runs]
+    at_wrist = []
+    for o in seen:
+        wrists = [p for w in (LEFT_WRIST, RIGHT_WRIST) if (p := _point(o, w, cfg)) is not None]
+        kinds: dict[str, float] = {}
+        for weapon in runs[o.t]:
+            if plausible(weapon, h, cfg) and any(
+                weapon.box[0] - margin <= x <= weapon.box[2] + margin
+                and weapon.box[1] - margin <= y <= weapon.box[3] + margin
+                for x, y in wrists
+            ):
+                kinds[weapon.kind] = max(kinds.get(weapon.kind, 0.0), weapon.conf)
+        at_wrist.append(kinds)
+    need = max(1, math.ceil(cfg.hold_min_share * len(seen) - 1e-9))
+    return seen, need, at_wrist
 
 
 @dataclass(frozen=True)

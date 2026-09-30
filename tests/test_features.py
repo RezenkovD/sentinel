@@ -8,6 +8,7 @@ from sentinel.agents.features import (
     approach_speed,
     distance_series,
     facing,
+    hold_conf,
     holds,
     person_speed,
 )
@@ -89,6 +90,37 @@ def test_hold_margin_is_measured_in_person_heights():
     # box edge 8 px from the wrist; margin 0.1 height = 10 px reaches it
     near = {t: [WeaponBox("knife", (58.0, 45.0, 70.0, 55.0), 0.6 + t)] for t in (0.0, 0.1)}
     assert holds(track, near, H, CFG) == "knife"
+
+
+def test_hold_conf_is_the_highest_detector_threshold_at_which_the_weapon_is_still_held():
+    """Decision 30.09 (report 03, item 4): one extraction with boxes from 0.4 answers any higher threshold."""
+    rng = np.random.default_rng(2026)
+    for _ in range(300):
+        times = [round(0.1 * i, 1) for i in range(int(rng.integers(1, 7)))]
+        track = _wrist_track(times, [50.0] * len(times), confs=[float(rng.choice([0.9, 0.3])) for _ in times])
+        runs = {
+            t: [
+                WeaponBox(
+                    str(rng.choice(["gun", "knife"])),
+                    (x - 5.0, 45.0, x + 5.0, 55.0),
+                    round(float(rng.uniform(0.4, 1.0)), 3),
+                )
+                for x in rng.choice([50.0, 50.0, 90.0], size=int(rng.integers(0, 3)))
+            ]
+            for t in times
+            if rng.random() < 0.8  # the detector ran on this frame
+        }
+        level = hold_conf(track, runs, H, CFG)
+        for tau in (0.4, 0.5, 0.6, 0.7, 0.8, 0.9):
+            above = {t: [b for b in boxes if b.conf >= tau] for t, boxes in runs.items()}
+            assert (holds(track, above, H, CFG) is not None) == (level is not None and level >= tau)
+
+
+def test_hold_conf_of_a_weapon_held_in_two_runs_is_the_weaker_of_the_two():
+    track = _wrist_track([0.0, 0.1, 0.2], [50.0, 50.0, 50.0])
+    runs = {0.0: [_gun_at(50.0, 50.0, 0.8)], 0.1: [_gun_at(50.0, 50.0, 0.55)], 0.2: []}  # 2 of 3 runs needed
+    assert hold_conf(track, runs, H, CFG) == pytest.approx(0.55)
+    assert hold_conf(track, {0.0: [], 0.1: [], 0.2: []}, H, CFG) is None
 
 
 def test_two_people_approaching():

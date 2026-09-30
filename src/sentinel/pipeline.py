@@ -124,7 +124,8 @@ class Perception:
 
     Shared by `sentinel run` and the episode cache (`sentinel eval extract`), so both see exactly the same
     scenes. Next to each scene comes its `aux`: service data outside the scene description that aggregators
-    never see — the frames in the window and the best raw weapon score (for the baseline detector).
+    never see — the frames in the window, the best raw weapon score (for the baseline detector) and, per
+    person, the highest weapon score at which "holds" would still be true (for choosing a threshold).
     """
 
     def __init__(self, agents: Agents, config: Config, source_id: str, zone: Zone) -> None:
@@ -170,7 +171,7 @@ class Perception:
         timing["scene"] = _ms_since(started)
         aux = None
         if scene is not None:  # this frame opens the next window
-            aux, self._aux = self._aux, self._new_aux()
+            aux, self._aux = self._window_aux(), self._new_aux()
         self._aux["frames"] += 1
         if weapon_run:
             self._aux["weapon_max_conf"] = max(
@@ -182,8 +183,12 @@ class Perception:
     def flush(self) -> tuple[SceneDescription | None, dict | None]:
         """End of the stream: the last, possibly shorter, window."""
         scene = self.builder.flush()
-        aux, self._aux = (self._aux, self._new_aux()) if scene is not None else (None, self._aux)
+        aux, self._aux = (self._window_aux(), self._new_aux()) if scene is not None else (None, self._aux)
         return scene, aux
+
+    def _window_aux(self) -> dict:
+        hold = {str(tid): round(level, 4) for tid, level in self.builder.last_hold_confs.items()}
+        return self._aux | {"hold_confs": hold}
 
 
 class Pipeline:

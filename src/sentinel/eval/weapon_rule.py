@@ -9,6 +9,10 @@ false ones?
 Both for the confirmed rule (the same track in two consecutive windows) and, for comparison, a single window;
 for the full frame (the main cache) and, when extracted, for person crops. Choice rule of the task: the
 largest Sevilla recall with at most 1 % false alarms on RWF train NonFight.
+
+`--sweep CACHE`: detector thresholds from the extraction's own up to 0.9 on one cache whose aux keeps every
+holder's threshold (`hold_confs`, perception 3.1): a person holds a weapon at τ exactly when that threshold is
+at least τ (decision 30.09, report 03, item 4 — crops with a higher threshold).
 """
 
 import argparse
@@ -21,6 +25,27 @@ import numpy as np
 from sentinel.eval.cache import OUT_DEFAULT, CachedEpisode, check_complete, load_episodes
 from sentinel.incidents import WeaponConfirmation
 from sentinel.schema import SceneDescription
+
+SWEEP = (0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9)
+
+
+def at_threshold(episode: CachedEpisode, tau: float) -> CachedEpisode:
+    """The episode as a detector threshold of `tau` would have made it: holders below `tau` let go."""
+    scenes = []
+    for scene, aux in zip(episode.scenes, episode.aux, strict=True):
+        if "hold_confs" not in aux:
+            raise KeyError(
+                "hold_confs: the cache was extracted without the holders' thresholds (perception < 3.1)"
+            )
+        levels = aux["hold_confs"]
+        persons = tuple(
+            p
+            if p.holds is None or levels.get(str(p.id), 0.0) >= tau
+            else p.model_copy(update={"holds": None})
+            for p in scene.persons
+        )
+        scenes.append(scene.model_copy(update={"persons": persons}))
+    return CachedEpisode(episode.meta, scenes, episode.aux)
 
 
 def weapon_alarms(scenes: list[SceneDescription], windows: int) -> list[bool]:
@@ -54,7 +79,7 @@ def alarm_share(episodes: list[CachedEpisode], windows: int) -> float:
     return float(np.mean([any(weapon_alarms(e.scenes, windows)) for e in episodes])) if episodes else 0.0
 
 
-def evaluate(root: Path, allow_partial: bool = False) -> dict:
+def _dev(root: Path, allow_partial: bool) -> tuple[list[CachedEpisode], list[CachedEpisode]]:
     sevilla = load_episodes(root, "us_gun", ["select"])
     check_complete(sevilla, "us_gun", ["select"], allow_partial=allow_partial)
     normal = [e for e in load_episodes(root, "rwf2000", ["train"]) if e.label == 0]
@@ -62,6 +87,33 @@ def evaluate(root: Path, allow_partial: bool = False) -> dict:
         raise RuntimeError(
             f"{root}: {len(normal)} of 640 NonFight train clips — wait or pass --allow-partial"
         )
+    return sevilla, normal
+
+
+def sweep(root: Path, allow_partial: bool = False, windows: int = 2) -> list[dict]:
+    """The confirmed rule at every threshold of SWEEP from the cache's own detector threshold up."""
+    sevilla, normal = _dev(root, allow_partial)
+    rows = []
+    for tau in SWEEP:
+        seg = segment_recall([at_threshold(e, tau) for e in sevilla], windows)
+        rows.append(
+            seg
+            | {
+                "tau": tau,
+                "median_time_to_alarm_s": float(np.median(seg["times_to_alarm_s"]))
+                if seg["times_to_alarm_s"]
+                else None,
+                "rwf_nonfight_clips": len(normal),
+                "rwf_nonfight_false_alarm_share": alarm_share(
+                    [at_threshold(e, tau) for e in normal], windows
+                ),
+            }
+        )
+    return rows
+
+
+def evaluate(root: Path, allow_partial: bool = False) -> dict:
+    sevilla, normal = _dev(root, allow_partial)
     rows = {}
     for windows in (2, 1):
         seg = segment_recall(sevilla, windows)
@@ -91,7 +143,14 @@ def main(argv: list[str] | None = None) -> None:
         "--out", type=Path, default=Path(f"results/weapon_rule_{date.today().isoformat()}.md")
     )
     parser.add_argument("--allow-partial", action="store_true", help="run on a cache still being extracted")
+    parser.add_argument(
+        "--sweep", type=Path, help="cache with holders' thresholds: detector thresholds up to 0.9"
+    )
+    parser.add_argument("--sweep-label", default="вирізки 320:2", help="name of the swept mode in the report")
     args = parser.parse_args(argv)
+    if args.sweep is not None:
+        _write_sweep(args, sweep(args.sweep, args.allow_partial))
+        return
     modes = {"кадр 480:2": args.episodes}
     if args.crops_episodes is not None:
         modes["вирізки 320:2"] = args.crops_episodes
@@ -118,6 +177,42 @@ def main(argv: list[str] | None = None) -> None:
     args.out.with_suffix(".json").write_text(
         json.dumps(results, indent=1, ensure_ascii=False), encoding="utf-8"
     )
+    print("\n".join(lines))
+
+
+def _tau(value: float) -> str:
+    return f"{value:.2f}".replace(".", ",")
+
+
+def _write_sweep(args, rows: list[dict]) -> None:
+    ok = [r for r in rows if r["rwf_nonfight_false_alarm_share"] <= 0.01 and r["recall"] is not None]
+    best = max(ok, key=lambda r: (r["recall"], -r["tau"])) if ok else None
+    lines = [
+        f"# Правило «зброя в руці»: поріг детектора, {args.sweep_label} — {date.today().isoformat()}",
+        "",
+        f"Кеш `{args.sweep}`: Севілья Cam1 + Cam5 (dev) і всі NonFight нашого train RWF; підтвердження — "
+        "той самий трек у двох вікнах поспіль. Для кожної людини вікна кеш тримає найвищий поріг, за якого "
+        "вона ще «тримає» зброю, тож один прогін детектора дає всі пороги.",
+        "",
+        "| Поріг | Сегментів зі зброєю | Повнота сегментів | Медіана часу до тривоги, с "
+        "| Тривог до появи зброї | NonFight train з хибною тривогою |",
+        "|---|---|---|---|---|---|",
+    ]
+    for r in rows:
+        mark = " **(обрано)**" if r is best else ""
+        lines.append(
+            f"| {_tau(r['tau'])}{mark} | {r['segments']} | {_fmt(r['recall'])} "
+            f"| {_fmt(r['median_time_to_alarm_s'])} | {r['alarms_before_weapon']} "
+            f"| {r['rwf_nonfight_false_alarm_share']:.1%} з {r['rwf_nonfight_clips']} |"
+        )
+    lines += [
+        "",
+        "Правило вибору: найбільша повнота за ≤ 1 % хибних тривог на NonFight train"
+        + (f" → поріг {_tau(best['tau'])}." if best else " — жоден поріг не проходить."),
+    ]
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    args.out.with_suffix(".json").write_text(json.dumps({"rows": rows}, indent=1), encoding="utf-8")
     print("\n".join(lines))
 
 
