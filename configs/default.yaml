@@ -151,3 +151,8 @@ bench:
   imgsz: [640, 480, 416]
   fps: [8, 10]
   warmup_frames: 10       # excluded from timings
+  quiet:                  # `sentinel bench --quiet` (session 03): foreign load = busy tasks outside our processes
+    start_limit: 1.5      # start when its 1-minute mean stays below this…
+    hold_s: 120           # …for this many seconds, on mains power with the performance profile
+    noisy_limit: 2.0      # a measurement during which the mean rose above this is noisy and repeated
+    span_s: 60            # the mean is taken over this many seconds

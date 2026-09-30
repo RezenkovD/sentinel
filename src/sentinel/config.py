@@ -143,10 +143,18 @@ class IncidentsConfig(_Section):
         return self
 
 
+class QuietConfig(_Section):
+    start_limit: float = Field(gt=0)  # foreign load (1-min mean) below this…
+    hold_s: float = Field(ge=0)  # …for this long starts a measurement
+    noisy_limit: float = Field(gt=0)  # a measurement during which it rose above this is noisy and repeated
+    span_s: float = Field(gt=0)  # length of the rolling mean
+
+
 class BenchConfig(_Section):
     imgsz: list[int]
     fps: list[float]
     warmup_frames: int = Field(ge=0)
+    quiet: QuietConfig
 
 
 class Config(_Section):

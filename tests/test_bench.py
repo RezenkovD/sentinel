@@ -315,6 +315,21 @@ def _quiet_row(backend: str, noisy: bool, rtf: float) -> dict:
     }
 
 
+def test_quiet_report_names_the_code_and_perception_it_measured():
+    from sentinel.bench import render_quiet_report
+
+    row = _quiet_row("openvino", noisy=False, rtf=0.5) | {"perception_version": "3.0"}
+    text = render_quiet_report([row], sources=[])
+    assert "abc1234" in text and "3.0" in text
+
+
+def test_quiet_window_thresholds_come_from_the_config():
+    from sentinel.config import DEFAULT_CONFIG, load_config
+
+    quiet = load_config(Path(__file__).parents[1] / DEFAULT_CONFIG).bench.quiet
+    assert (quiet.start_limit, quiet.hold_s, quiet.noisy_limit, quiet.span_s) == (1.5, 120.0, 2.0, 60.0)
+
+
 def test_quiet_report_shows_the_latest_clean_row_per_combination_and_counts_noisy_ones():
     from sentinel.bench import render_quiet_report
 

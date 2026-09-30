@@ -699,10 +699,12 @@ def render_quiet_report(rows: Sequence[dict], sources: Sequence[Path]) -> str:
         if not row["noisy"]:
             latest[(row["people"], row["weapons"], row["backend"])] = row
     noisy = sum(row["noisy"] for row in rows)
+    code = sorted({f"`{r.get('commit', '?')}` (сприйняття {r.get('perception_version', '?')})" for r in rows})
     lines = [
         f"# Bench: тихий замір повного конвеєра — {time.strftime('%Y-%m-%d')}",
         "",
         "Середовище: " + "; ".join(environment_notes()) + ".",
+        "Код, що міряли: " + (", ".join(code) if code else "—") + ".",
         f"Кліпів {len(sources)}; частота аналізу 10 кадрів/с. Замір стартує, коли 1-хвилинне середнє чужого "
         "навантаження (задачі, що виконуються або чекають введення-виведення, без наших процесів) < 1,5 "
         "протягом 2 хв, від мережі, профіль `performance`; прогін, під час якого воно перевищило 2, — шумний "
@@ -747,6 +749,7 @@ def run_quiet_bench(
     import sentinel.agents.context  # noqa: F401  (imported now: the code measured is the code at launch)
     import sentinel.agents.detector  # noqa: F401
     import sentinel.agents.features  # noqa: F401
+    import sentinel.agents.motion  # noqa: F401
     import sentinel.agents.pose_features  # noqa: F401
     import sentinel.agents.weapons  # noqa: F401
     import sentinel.aggregators.rules  # noqa: F401
@@ -755,6 +758,7 @@ def run_quiet_bench(
     import sentinel.pipeline  # noqa: F401
     import sentinel.scene  # noqa: F401
     from sentinel.models import export_openvino
+    from sentinel.pipeline import PERCEPTION_VERSION
     from sentinel.quiet import (
         QuietRunner,
         extraction_pids,
@@ -797,6 +801,7 @@ def run_quiet_bench(
             "load_end": machine_load_average(),
             "time": datetime.now().isoformat(timespec="seconds"),
             "commit": commit,
+            "perception_version": PERCEPTION_VERSION,
             "clips": [s.name for s in sources],
         }
 
@@ -808,12 +813,17 @@ def run_quiet_bench(
         state = read_power_state()
         return state.source == "ac", state.profile
 
+    q = config.bench.quiet
     runner = QuietRunner(
         sample=lambda: foreign_load(own),
         measure=measure,
         power=power,
         pause=pause_extraction,
         resume=resume_extraction,
+        start_limit=q.start_limit,
+        hold_s=q.hold_s,
+        noisy_limit=q.noisy_limit,
+        span_s=q.span_s,
         log=lambda message: print(time.strftime("%Y-%m-%d %H:%M:%S"), message, flush=True),
         on_row=save,
     )
