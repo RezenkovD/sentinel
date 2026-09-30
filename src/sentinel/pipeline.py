@@ -24,7 +24,10 @@ from sentinel.notify import Notifier
 from sentinel.scene import SceneBuilder
 from sentinel.schema import RiskResult, SceneDescription, Zone
 
-PERCEPTION_VERSION = "3.0"  # schema v3 features; frozen before the episode cache (session 03, step 2)
+# Version of the perception code (agents, features, scene assembly). The episode cache is keyed by it and by a
+# hash of the perception settings and files, but code is not hashed: any change to perception code after the
+# freeze (session 03, step 2) must bump this version, or cached and live scenes would silently differ.
+PERCEPTION_VERSION = "3.0"
 
 
 class Aggregator(Protocol):
