@@ -18,6 +18,7 @@ EVAL_COMMANDS = {
     "feature-auc": ("feature_auc", True),
     "train-a": ("train_a", True),
     "weapon-rule": ("weapon_rule", False),
+    "baselines": ("baselines", False),
 }
 
 
