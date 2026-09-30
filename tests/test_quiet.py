@@ -1,6 +1,8 @@
 import time
 from pathlib import Path
 
+import pytest
+
 from sentinel.quiet import LoadWindow, QuietRunner, own_busy_threads, system_busy
 
 
@@ -78,6 +80,29 @@ def _runner(loads, measured, events, clock, ac=True, profile="performance"):
         span_s=60.0,
         step_s=5.0,
     )
+
+
+def test_held_pause_keeps_our_background_work_stopped_from_the_first_measurement_to_the_end():
+    """Decision 30.09 (report 03): the quiet bench runs with the extraction paused for the whole bench."""
+    clock, measured, events = FakeClock(), [], []
+    runner = _runner(lambda t: 0.5, measured, events, clock)
+    runner.hold_pause = True
+    rows = runner.run(["a", "b", "c"], deadline_s=10_000)
+    assert len(rows) == 3 and [e[0] for e in events] == ["pause", "resume"]
+    assert events[0][1] == measured[0][1] and events[1][1] >= measured[-1][1] + 100
+
+
+def test_held_pause_is_released_when_the_bench_fails():
+    clock, events = FakeClock(), []
+
+    def broken(combo, during) -> dict:
+        raise RuntimeError("model file missing")
+
+    runner = _runner(lambda t: 0.5, [], events, clock)
+    runner.measure, runner.hold_pause = broken, True
+    with pytest.raises(RuntimeError):
+        runner.run(["a"], deadline_s=10_000)
+    assert [e[0] for e in events] == ["pause", "resume"]
 
 
 def test_measurement_waits_for_two_quiet_minutes_and_pauses_our_background_work():

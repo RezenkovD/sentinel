@@ -97,8 +97,17 @@ class QuietRunner:
     step_s: float = 5.0
     log: Callable[[str], None] = lambda message: None
     on_row: Callable[[dict], None] = lambda row: None  # called with every finished row (to save it at once)
+    hold_pause: bool = False  # keep our background work paused from the first measurement to the end
 
     def run(self, combos: Sequence[Any], deadline_s: float) -> list[dict]:
+        paused = [False]
+        try:
+            return self._run(combos, deadline_s, paused)
+        finally:
+            if paused[0]:
+                self.resume()
+
+    def _run(self, combos: Sequence[Any], deadline_s: float, paused: list[bool]) -> list[dict]:
         rows: list[dict] = []
         pending = list(combos)
         window = LoadWindow(self.span_s)
@@ -129,11 +138,13 @@ class QuietRunner:
                 means.append(window.mean(now))
 
             self.log(f"measuring {combo} (foreign load {means[0]:.2f})")
-            self.pause()
-            try:
-                row = self.measure(combo, during)
-            finally:
+            if not paused[0]:
+                self.pause()
+                paused[0] = True
+            row = self.measure(combo, during)
+            if not self.hold_pause:
                 self.resume()
+                paused[0] = False
             noisy = max(means) > self.noisy_limit
             row = row | {
                 "noisy": noisy,

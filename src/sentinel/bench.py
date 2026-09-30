@@ -700,6 +700,7 @@ def render_quiet_report(rows: Sequence[dict], sources: Sequence[Path]) -> str:
             latest[(row["people"], row["weapons"], row["backend"])] = row
     noisy = sum(row["noisy"] for row in rows)
     code = sorted({f"`{r.get('commit', '?')}` (сприйняття {r.get('perception_version', '?')})" for r in rows})
+    held = bool(rows) and all(r.get("extraction_held") for r in rows)
     lines = [
         f"# Bench: тихий замір повного конвеєра — {time.strftime('%Y-%m-%d')}",
         "",
@@ -708,7 +709,8 @@ def render_quiet_report(rows: Sequence[dict], sources: Sequence[Path]) -> str:
         f"Кліпів {len(sources)}; частота аналізу 10 кадрів/с. Замір стартує, коли 1-хвилинне середнє чужого "
         "навантаження (задачі, що виконуються або чекають введення-виведення, без наших процесів) < 1,5 "
         "протягом 2 хв, від мережі, профіль `performance`; прогін, під час якого воно перевищило 2, — шумний "
-        "і повторюється. Наше фонове вилучення на час заміру призупинено.",
+        "і повторюється. Наше фонове вилучення "
+        + ("призупинено на весь замір." if held else "призупинено на час кожного прогону."),
         f"Шумних прогонів: {noisy}.",
         "",
         "| джерело людей | зброя | бекенд | люди, мс | поза, мс | зброя, мс | разом, мс | RTF@10 | "
@@ -741,8 +743,10 @@ def run_quiet_bench(
     warmup: int,
     out: Path,
     deadline_h: float,
+    hold_extraction: bool = False,
 ) -> Path:
-    """Every people source x weapon variant x backend, each measured in its own quiet window."""
+    """Every people source x weapon variant x backend, each measured in its own quiet window; with
+    `hold_extraction` our background extraction stays paused from the first measurement to the end."""
     import os
     from datetime import datetime
 
@@ -802,6 +806,7 @@ def run_quiet_bench(
             "time": datetime.now().isoformat(timespec="seconds"),
             "commit": commit,
             "perception_version": PERCEPTION_VERSION,
+            "extraction_held": hold_extraction,
             "clips": [s.name for s in sources],
         }
 
@@ -826,6 +831,7 @@ def run_quiet_bench(
         span_s=q.span_s,
         log=lambda message: print(time.strftime("%Y-%m-%d %H:%M:%S"), message, flush=True),
         on_row=save,
+        hold_pause=hold_extraction,
     )
     combos = [(b, p, w) for p in people for w in weapons for b in backends]  # the first people source first
     runner.run(combos, deadline_s=deadline_h * 3600)

@@ -83,6 +83,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     bench.add_argument("--backends", nargs="+", choices=["torch", "openvino"], default=["torch", "openvino"])
     bench.add_argument("--deadline-h", type=float, default=20.0, help="--quiet gives up after this long")
+    bench.add_argument(
+        "--hold-extraction",
+        action="store_true",
+        help="--quiet: keep our background extraction paused from the first measurement to the end",
+    )
     return parser
 
 
@@ -126,6 +131,7 @@ def main(argv: list[str] | None = None) -> int:
             config.bench.warmup_frames if args.warmup is None else args.warmup,
             args.out or Path("results") / f"bench_quiet_{date.today().isoformat()}.md",
             args.deadline_h,
+            hold_extraction=args.hold_extraction,
         )
         print(f"report: {report}")
         return 0

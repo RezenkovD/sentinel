@@ -343,3 +343,11 @@ def test_quiet_report_shows_the_latest_clean_row_per_combination_and_counts_nois
     assert len(table) == 2 and any("| torch |" in row and "| 0.61 |" in row for row in table)
     assert "1.30" not in text
     assert "Шумних прогонів: 1." in text
+
+
+def test_quiet_report_says_whether_the_extraction_was_paused_for_the_whole_bench():
+    from sentinel.bench import render_quiet_report
+
+    held = render_quiet_report([_quiet_row("openvino", noisy=False, rtf=0.5) | {"extraction_held": True}], [])
+    per_run = render_quiet_report([_quiet_row("openvino", noisy=False, rtf=0.5)], [])
+    assert "призупинено на весь замір" in held and "на час кожного прогону" in per_run
