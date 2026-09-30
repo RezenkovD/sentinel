@@ -141,10 +141,15 @@ def _read_meta(path: Path) -> dict | None:
 
 
 def is_current(path: Path, meta: dict) -> bool:
-    """The file exists and was made by this very perception."""
+    """The file exists and was made by this perception: the same settings hash, and the same version or one
+    this code reads as its own (`COMPATIBLE_PERCEPTIONS`)."""
+    from sentinel.pipeline import compatible_perceptions
+
     existing = _read_meta(path) if path.exists() else None
-    return existing is not None and all(
-        existing.get(k) == meta[k] for k in ("perception_version", "perception_hash")
+    return (
+        existing is not None
+        and existing.get("perception_hash") == meta["perception_hash"]
+        and compatible_perceptions({existing.get("perception_version"), meta["perception_version"]})
     )
 
 

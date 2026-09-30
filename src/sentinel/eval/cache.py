@@ -49,16 +49,21 @@ def read_episode(path: Path) -> CachedEpisode:
 
 
 def load_episodes(root: Path, dataset: str, parts: list[str] | None = None) -> list[CachedEpisode]:
-    """Episodes of `dataset` (optionally only some parts), sorted by id; all must share one perception."""
+    """Episodes of `dataset` (optionally only some parts), sorted by id; all must share one perception
+    (one settings hash; versions the same or compatible, e.g. 3.0 and 3.1)."""
     episodes = []
     for path in sorted((root / dataset).rglob("*.jsonl")):
         with path.open(encoding="utf-8") as f:
             meta = json.loads(f.readline())["meta"]
         if parts is None or meta["part"] in parts:
             episodes.append(read_episode(path))
-    perceptions = {(e.meta["perception_version"], e.meta["perception_hash"]) for e in episodes}
-    if len(perceptions) > 1:
-        raise RuntimeError(f"episodes of {dataset} come from different perceptions: {sorted(perceptions)}")
+    from sentinel.pipeline import compatible_perceptions
+
+    hashes = {e.meta["perception_hash"] for e in episodes}
+    versions = {e.meta["perception_version"] for e in episodes}
+    if len(hashes) > 1 or (versions and not compatible_perceptions(versions)):
+        perceptions = sorted({(e.meta["perception_version"], e.meta["perception_hash"]) for e in episodes})
+        raise RuntimeError(f"episodes of {dataset} come from different perceptions: {perceptions}")
     return sorted(episodes, key=lambda e: e.episode_id)
 
 

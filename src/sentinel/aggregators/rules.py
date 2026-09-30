@@ -278,7 +278,7 @@ class RulesAggregator:
     @classmethod
     def load(cls, path: Path, config: Config) -> "RulesAggregator":
         """Load saved weights; refuse ones made for other features, another schema or another perception."""
-        from sentinel.pipeline import PERCEPTION_VERSION
+        from sentinel.pipeline import PERCEPTION_VERSION, compatible_perceptions
 
         data = json.loads(Path(path).read_text(encoding="utf-8"))
         if tuple(data["features"]) != FEATURE_NAMES:
@@ -287,7 +287,8 @@ class RulesAggregator:
             raise ValueError(
                 f"{path} was trained on schema v{data['schema_version']}, this is v{SCHEMA_VERSION}"
             )
-        if data.get("perception_version", PERCEPTION_VERSION) != PERCEPTION_VERSION:
+        trained_on = data.get("perception_version", PERCEPTION_VERSION)
+        if not compatible_perceptions({trained_on, PERCEPTION_VERSION}):
             raise ValueError(
                 f"{path} was trained on perception {data['perception_version']}, this is {PERCEPTION_VERSION}"
             )

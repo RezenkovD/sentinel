@@ -16,6 +16,7 @@ from sentinel.eval.train_a import (
     quantile_thresholds,
     train_windows,
 )
+from sentinel.pipeline import PERCEPTION_VERSION
 from sentinel.schema import Interaction, Person, SceneDescription, Summary, Window, Zone
 
 CONFIG = load_config(Path(__file__).parents[1] / DEFAULT_CONFIG)
@@ -115,6 +116,7 @@ def test_saved_model_loads_with_its_metadata_and_refuses_another_perception(tmp_
     assert data["schema_version"] == 3 and data["perception_version"] == "3.0" and data["c"] == 1.0
     loaded = RulesAggregator.load(path, CONFIG)
     assert np.allclose(loaded.weights, result.aggregator.weights)
+    assert PERCEPTION_VERSION == "3.1"  # a model fitted on the 3.0 cache stays valid for 3.1 (decision 30.09)
     data["perception_version"] = "2.0"
     path.write_text(json.dumps(data))
     with pytest.raises(ValueError, match="perception"):

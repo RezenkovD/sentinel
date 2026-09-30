@@ -10,6 +10,7 @@ from sentinel.config import DEFAULT_CONFIG, load_config
 from sentinel.eval.extract import (
     Episode,
     extract_episode,
+    is_current,
     perception_hash,
     select_xd_subset,
     sevilla_frames,
@@ -140,6 +141,19 @@ def test_a_finished_episode_is_skipped_and_a_different_perception_is_refused(tmp
     assert extract_episode(_episode(tmp_path), perception, out, meta) is False and perception.resets == 1
     with pytest.raises(RuntimeError, match="perception"):
         extract_episode(_episode(tmp_path), perception, out, meta | {"perception_hash": "new"})
+
+
+def test_a_file_of_the_compatible_perception_3_0_stays_current_for_3_1(tmp_path: Path):
+    """Decision 30.09 (report 03): 3.1 only normalises pixel motion, caches of 3.0 are not extracted again."""
+    out = tmp_path / "clip.jsonl"
+    perception = FakePerception()
+    v30 = {"perception_version": "3.0", "perception_hash": "abc"}
+    extract_episode(_episode(tmp_path), perception, out, v30)
+    assert is_current(out, {"perception_version": "3.1", "perception_hash": "abc"})
+    assert not is_current(out, {"perception_version": "3.1", "perception_hash": "other"})
+    old = tmp_path / "old.jsonl"
+    extract_episode(_episode(tmp_path), perception, old, v30 | {"perception_version": "2.0"})
+    assert not is_current(old, {"perception_version": "3.1", "perception_hash": "abc"})
 
 
 def test_an_interrupted_episode_leaves_no_file_behind(tmp_path: Path):

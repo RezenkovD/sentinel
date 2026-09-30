@@ -27,7 +27,17 @@ from sentinel.schema import RiskResult, SceneDescription, Zone
 # Version of the perception code (agents, features, scene assembly). The episode cache is keyed by it and by a
 # hash of the perception settings and files, but code is not hashed: any change to perception code after the
 # freeze (session 03, step 2) must bump this version, or cached and live scenes would silently differ.
-PERCEPTION_VERSION = "3.0"
+PERCEPTION_VERSION = "3.1"
+# Earlier versions whose caches and models stay valid, with the reason (decision 30.09, report 03): 3.1 only
+# normalises pixel motion to the nominal analysis interval, which leaves frames on the nominal grid — the
+# offline RWF and Sevilla caches — exactly as they were; XD at 24/25 frames/s differs within the grid's
+# alternation of intervals, accepted without re-extraction.
+COMPATIBLE_PERCEPTIONS = {"3.0": "3.1 normalises pixel motion to the nominal interval (decision 30.09)"}
+
+
+def compatible_perceptions(versions: set[str]) -> bool:
+    """One version, or only versions this code reads as its own (the current one and the compatible ones)."""
+    return len(versions) == 1 or versions <= {PERCEPTION_VERSION, *COMPATIBLE_PERCEPTIONS}
 
 
 def perception_hash(config: Config) -> str:
@@ -151,7 +161,9 @@ class Perception:
         weapon_run = getattr(self.agents.weapons, "ran", True)
         timing["weapons"] = _ms_since(started)
         started = time.perf_counter()
-        motion = None if self.agents.motion is None else self.agents.motion.update(frame.image, tracks)
+        motion = (
+            None if self.agents.motion is None else self.agents.motion.update(frame.image, tracks, frame.t)
+        )
         timing["motion"] = _ms_since(started)
         started = time.perf_counter()
         scene = self.builder.add(frame.t, tracks, skeletons, weapons, weapon_run, motion)
@@ -343,7 +355,7 @@ def build_agents(config: Config, record_weapons: bool = False) -> Agents:
             device,
             record_conf=w.record_conf if record_weapons else None,
         ),
-        motion=PixelMotion(config.motion.max_width, config.motion.threshold),
+        motion=PixelMotion(config.motion.max_width, config.motion.threshold, 1.0 / config.analysis.fps),
     )
 
 

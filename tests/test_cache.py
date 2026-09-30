@@ -31,14 +31,22 @@ def _scene(t: float, speed: float, n_persons: int = 1, energy: float | None = 1.
     return scene.model_dump(mode="json")
 
 
-def _write(root: Path, episode_id: str, label: int, speeds: list[float], perception_hash: str = "h1", **kw):
+def _write(
+    root: Path,
+    episode_id: str,
+    label: int,
+    speeds: list[float],
+    perception_hash: str = "h1",
+    perception_version: str = "3.0",
+    **kw,
+):
     path = root / "rwf2000" / f"{episode_id}.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
     meta = {
         "episode_id": episode_id,
         "part": episode_id.split("/")[0],
         "label": label,
-        "perception_version": "3.0",
+        "perception_version": perception_version,
         "perception_hash": perception_hash,
     }
     lines = [json.dumps({"meta": meta})]
@@ -59,6 +67,15 @@ def test_episodes_are_read_back_with_scenes_and_aux(tmp_path: Path):
 def test_mixing_episodes_of_different_perception_is_refused(tmp_path: Path):
     _write(tmp_path, "train/Fight/a", 1, [1.0], perception_hash="h1")
     _write(tmp_path, "train/NonFight/b", 0, [0.1], perception_hash="h2")
+    with pytest.raises(RuntimeError, match="perception"):
+        load_episodes(tmp_path, "rwf2000", parts=["train"])
+
+
+def test_episodes_of_perception_3_0_and_3_1_with_one_hash_are_one_cache(tmp_path: Path):
+    _write(tmp_path, "train/Fight/a", 1, [1.0], perception_version="3.0")
+    _write(tmp_path, "train/NonFight/b", 0, [0.1], perception_version="3.1")
+    assert len(load_episodes(tmp_path, "rwf2000", parts=["train"])) == 2
+    _write(tmp_path, "train/NonFight/c", 0, [0.1], perception_version="2.0")
     with pytest.raises(RuntimeError, match="perception"):
         load_episodes(tmp_path, "rwf2000", parts=["train"])
 
