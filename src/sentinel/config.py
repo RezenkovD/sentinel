@@ -67,6 +67,7 @@ class WeaponsConfig(_Section):
     imgsz: int = Field(gt=0)
     conf: float = Field(ge=0, le=1)
     every_n_frames: int = Field(ge=1, le=2)
+    record_conf: float = Field(ge=0, le=1)  # episode cache: best raw score down to this goes to `aux`
     crop_pad: float = Field(ge=0)
     class_map: dict[str, Literal["gun", "knife"]]
 

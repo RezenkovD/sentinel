@@ -13,6 +13,8 @@ EVAL_COMMANDS = {
     "weapons": ("weapons", False),
     "sanity": ("sanity", True),
     "people": ("people", True),
+    "extract": ("extract", True),
+    "xd-subset": ("xd_subset", False),
 }
 
 

@@ -1,0 +1,155 @@
+"""Episode cache (session 03, step 3): datasets -> episodes -> scene descriptions per window."""
+
+import json
+from pathlib import Path
+
+import pytest
+
+from sentinel.config import DEFAULT_CONFIG, load_config
+from sentinel.eval.extract import (
+    Episode,
+    extract_episode,
+    perception_hash,
+    select_xd_subset,
+    sevilla_frames,
+    window_label,
+    xd_labels,
+)
+from sentinel.schema import SceneDescription, Summary, Window, Zone
+
+CONFIG = load_config(Path(__file__).parents[1] / DEFAULT_CONFIG)
+
+
+def test_window_is_positive_when_at_least_half_of_it_is_inside_an_annotated_event():
+    events = [(10.0, 12.5)]
+    assert window_label(10.0, 11.0, events) == 1
+    assert window_label(12.0, 13.0, events) == 1  # exactly half
+    assert window_label(12.4, 13.4, events) == 0
+    assert window_label(3.0, 4.0, []) == 0
+
+
+def test_xd_labels_come_from_the_file_name():
+    assert xd_labels("Brick.Mansions.2014__#00-41-25_00-42-36_label_B1-0-0") == ["B1"]
+    assert xd_labels("v=abc__#1_label_B2-G-0") == ["B2", "G"]
+    assert xd_labels("About.Time.2013__#00-23-50_00-24-31_label_A") == ["A"]
+
+
+def test_xd_subset_is_balanced_by_duration_and_skips_out_of_scope_videos():
+    videos = []
+    for i in range(40):
+        videos.append({"name": f"f{i}_label_B1-0-0", "duration_s": 60.0})
+        videos.append({"name": f"s{i}_label_B2-0-0", "duration_s": 90.0})
+        videos.append({"name": f"n{i}_label_A", "duration_s": 120.0})
+        videos.append({"name": f"r{i}_label_B4-0-0", "duration_s": 60.0})  # riots: out of scope
+        videos.append({"name": f"x{i}_label_B2-G-0", "duration_s": 60.0})  # shooting with explosions
+    subset = select_xd_subset(videos, budget_hours=1.5, seed=2026)
+    by_stratum = {}
+    for v in subset["videos"]:
+        by_stratum[v["stratum"]] = by_stratum.get(v["stratum"], 0.0) + v["duration_s"]
+    assert set(by_stratum) == {"B1", "B2", "A"}
+    assert all(abs(d - 1800.0) <= 120.0 for d in by_stratum.values())  # ~0.5 h each
+    assert subset["excluded"]["out_of_scope"] == 80
+    assert subset == select_xd_subset(videos, budget_hours=1.5, seed=2026)  # fixed seed
+
+
+def test_sevilla_frames_are_timed_at_two_per_second_and_labelled_from_xml(tmp_path: Path):
+    for n, has_gun in ((100, False), (101, True), (103, True)):
+        stem = f"Cam1-X_Segment_0_x264_frame_{n}"
+        (tmp_path / f"{stem}.jpg").write_bytes(b"")
+        objects = "<object><name>Handgun</name></object>" if has_gun else ""
+        (tmp_path / f"{stem}.xml").write_text(f"<annotation>{objects}</annotation>")
+    frames = sevilla_frames(tmp_path, "Cam1-X_Segment_0_x264")
+    assert [(t, label) for t, _, label in frames] == [(0.0, 0), (0.5, 1), (1.5, 1)]  # frame 102 is missing
+
+
+def test_perception_hash_follows_perception_settings_only():
+    base = perception_hash(CONFIG)
+    assert base == perception_hash(CONFIG)
+    other_threshold = CONFIG.model_copy(
+        update={"motion": CONFIG.motion.model_copy(update={"threshold": CONFIG.motion.threshold + 1})}
+    )
+    assert perception_hash(other_threshold) != base
+    other_alarm = CONFIG.model_copy(update={"incidents": CONFIG.incidents.model_copy(update={"k": 2})})
+    assert perception_hash(other_alarm) == base  # decisions downstream do not change the cache
+
+
+class FakePerception:
+    """Two windows of scenes with aux, like Perception.process / flush."""
+
+    def __init__(self) -> None:
+        self.resets = 0
+
+    def reset(self) -> None:
+        self.resets += 1
+        self._n = 0
+
+    def _scene(self, t0: float, t1: float) -> SceneDescription:
+        return SceneDescription(
+            window=Window(t_start=t0, t_end=t1, source="cam-1"),
+            zone=Zone(type="street", hours="day", expected_density="medium"),
+            summary=Summary(n_persons=0, crowd_motion=0.0, weapon_visible=False),
+        )
+
+    def process(self, frame):
+        self._n += 1
+        if frame.t == 1.0:  # the first frame of the second window closes the first one
+            return self._scene(0.0, 1.0), {"frames": 2, "weapon_max_conf": 0.3}, None
+        return None, None, None
+
+    def flush(self):
+        return self._scene(1.0, 1.5), {"frames": 2, "weapon_max_conf": 0.0}
+
+
+class FakeFrame:
+    def __init__(self, t: float) -> None:
+        self.t, self.image = t, None
+
+
+def _episode(tmp_path: Path) -> Episode:
+    frames = [FakeFrame(t) for t in (0.0, 0.5, 1.0, 1.5)]
+    return Episode(
+        dataset="demo",
+        part="dev",
+        episode_id="dev/clip_1",
+        label=1,
+        duration_s=2.0,
+        frames=lambda: iter(frames),
+        events=[(0.0, 0.6)],
+        frame_labels=None,
+    )
+
+
+def test_an_episode_is_written_as_meta_plus_one_line_per_window(tmp_path: Path):
+    out = tmp_path / "dev" / "clip_1.jsonl"
+    meta = {"perception_version": "3.0", "perception_hash": "abc"}
+    assert extract_episode(_episode(tmp_path), FakePerception(), out, meta) is True
+    lines = [json.loads(line) for line in out.read_text().splitlines()]
+    assert lines[0]["meta"]["episode_id"] == "dev/clip_1" and lines[0]["meta"]["label"] == 1
+    assert lines[0]["meta"]["perception_hash"] == "abc" and lines[0]["meta"]["windows"] == 2
+    assert [line["aux"]["label"] for line in lines[1:]] == [1, 0]  # 0.6 s of the first window is an event
+    assert lines[1]["aux"]["weapon_max_conf"] == 0.3
+    assert SceneDescription.model_validate(lines[2]["scene"]).window.t_end == 1.5
+
+
+def test_a_finished_episode_is_skipped_and_a_different_perception_is_refused(tmp_path: Path):
+    out = tmp_path / "clip.jsonl"
+    meta = {"perception_version": "3.0", "perception_hash": "abc"}
+    perception = FakePerception()
+    extract_episode(_episode(tmp_path), perception, out, meta)
+    assert extract_episode(_episode(tmp_path), perception, out, meta) is False and perception.resets == 1
+    with pytest.raises(RuntimeError, match="perception"):
+        extract_episode(_episode(tmp_path), perception, out, meta | {"perception_hash": "new"})
+
+
+def test_an_interrupted_episode_leaves_no_file_behind(tmp_path: Path):
+    out = tmp_path / "clip.jsonl"
+
+    class Broken(FakePerception):
+        def process(self, frame):
+            raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        extract_episode(
+            _episode(tmp_path), Broken(), out, {"perception_version": "3.0", "perception_hash": "x"}
+        )
+    assert not out.exists() and list(tmp_path.iterdir()) == []

@@ -1,0 +1,1196 @@
+{
+ "budget_hours": 4.0,
+ "seed": 2026,
+ "rule": "equal time for B1 / B2 / A; labels outside {B1, B2} excluded (scenario limit)",
+ "videos": [
+  {
+   "name": "Ip.Man.2008__#00-48-57_00-50-47_label_B1-0-0",
+   "duration_s": 110.04,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "Haywire.2011__#00-16-07_00-16-49_label_B1-0-0",
+   "duration_s": 42.0,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "Braveheart.1995__#02-05-34_02-06-40_label_B1-0-0",
+   "duration_s": 66.04,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "v=TsuuRo6PEXM__#1_label_B1-0-0",
+   "duration_s": 180.96,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "v=cuUK-3MNqtw__#1_label_B1-0-0",
+   "duration_s": 85.96,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "v=9Ydg5IeZpFI__#1_label_B1-0-0",
+   "duration_s": 192.54,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "v=96N4XAJ7FKM__#1_label_B1-0-0",
+   "duration_s": 202.5,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "Gladiator.2000__#01-10-27_01-11-59_label_B1-0-0",
+   "duration_s": 92.0,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "v=PuZy1PQIgrA__#1_label_B1-0-0",
+   "duration_s": 117.33,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "v=MqrNCb2N5to__#1_label_B1-0-0",
+   "duration_s": 105.54,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "Brick.Mansions.2014__#00-16-26_00-17-12_label_B1-0-0",
+   "duration_s": 46.0,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "v=3e3C-LQWF2s__#1_label_B1-0-0",
+   "duration_s": 184.21,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "v=sbEHU4GskX4__#1_label_B1-0-0",
+   "duration_s": 118.0,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "Kill.Bill.Vol.1.2003__#01-17-20_01-20-20_label_B1-0-0",
+   "duration_s": 180.04,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "The.Fast.and.the.Furious.2001__#00-52-18_00-53-36_label_B1-0-0",
+   "duration_s": 78.04,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "Haywire.2011__#00-39-07_00-41-48_label_B1-B2-0",
+   "duration_s": 161.04,
+   "stratum": "B1",
+   "labels": [
+    "B1",
+    "B2"
+   ]
+  },
+  {
+   "name": "New.Kids.Turbo.2010__#00-50-13_00-50-34_label_B1-0-0",
+   "duration_s": 21.0,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "v=FW_qbiPH7UA__#1_label_B1-0-0",
+   "duration_s": 136.79,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "Rush.Hour.3.2007.BluRay__#01-12-16_01-12-36_label_B1-0-0",
+   "duration_s": 20.04,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "v=yrpZJ8Vr3aA__#1_label_B1-0-0",
+   "duration_s": 98.08,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "Fast.Furious.6.2013__#01-38-33_01-39-20_label_B1-0-0",
+   "duration_s": 47.04,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "Mission.Impossible.Ghost.Protocol.2011__#01-12-38_01-13-43_label_B1-0-0",
+   "duration_s": 65.04,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "GoldenEye.1995__#02-02-15_02-02-47_label_B1-0-0",
+   "duration_s": 32.08,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "v=6nfo9c7a5pE__#1_label_B1-0-0",
+   "duration_s": 51.46,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "Haywire.2011__#00-03-51_00-05-12_label_B1-B2-0",
+   "duration_s": 81.04,
+   "stratum": "B1",
+   "labels": [
+    "B1",
+    "B2"
+   ]
+  },
+  {
+   "name": "GoldenEye.1995__#00-24-53_00-25-06_label_B1-0-0",
+   "duration_s": 13.04,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "v=oipd63DGadU__#1_label_B1-0-0",
+   "duration_s": 58.25,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "v=gENp4SyNxkI__#1_label_B1-0-0",
+   "duration_s": 53.12,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "v=osjdmjNJUdg__#1_label_B1-0-0",
+   "duration_s": 96.67,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "v=tivXK3PGByk__#1_label_B1-0-0",
+   "duration_s": 153.75,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "wangted.2008__#0-45-25_0-47-01_label_B1-0-0",
+   "duration_s": 96.04,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "v=0W8LohxH9nI__#1_label_B1-0-0",
+   "duration_s": 58.88,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "v=q_DhkdHGXos__#1_label_B1-0-0",
+   "duration_s": 193.25,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "Taken.2.UNRATED.EXTENDED.2012__#01-18-40_01-19-00_label_B1-0-0",
+   "duration_s": 20.04,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "Bullet.in.the.Head.1990__#00-17-20_00-18-55_label_B1-0-0",
+   "duration_s": 95.04,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "Mission.Impossible.Fallout.2018__#02-03-50_02-04-35_label_B1-0-0",
+   "duration_s": 45.0,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "The.Bourne.Identity.2002__#0-19-53_0-21-48_label_B1-0-0",
+   "duration_s": 115.04,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "Crank.Dircut.2006__#0-27-42_0-29-01_label_B1-0-0",
+   "duration_s": 79.08,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "v=KUeUxbsBO6s__#1_label_B1-0-0",
+   "duration_s": 114.5,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "v=3y2OOc6WTrg__#1_label_B1-0-0",
+   "duration_s": 181.33,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "v=BQjKQbYgUBA__#1_label_B1-0-0",
+   "duration_s": 142.62,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "Taken.Extended.Cut.2008__#00-33-51_00-34-03_label_B1-0-0",
+   "duration_s": 12.04,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "v=ovQ1VTJ_IUI__#1_label_B1-0-0",
+   "duration_s": 70.33,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "v=Q8K7roZu3WU__#1_label_B1-0-0",
+   "duration_s": 53.96,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "Young.And.Dangerous.I.1996__#0-46-57_0-48-57_label_B1-0-0",
+   "duration_s": 120.04,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "v=8ewWXhYRUNs__#1_label_B1-0-0",
+   "duration_s": 57.04,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "Fast.Furious.6.2013__#01-03-25_01-04-59_label_B1-0-0",
+   "duration_s": 94.0,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "Ip.Man.3.2015__#00-46-08_00-54-20_label_B1-0-0",
+   "duration_s": 492.0,
+   "stratum": "B1",
+   "labels": [
+    "B1"
+   ]
+  },
+  {
+   "name": "City.of.God.2002__#01-52-20_01-54-32_label_B2-0-0",
+   "duration_s": 132.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Kill.Bill.Vol.2.2004__#0-25-20_0-26-20_label_B2-0-0",
+   "duration_s": 60.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Sin.City.2005__#0-32-00_0-32-16_label_B2-0-0",
+   "duration_s": 16.0,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Quantum.Of.Solace.2008__#01-30-26_01-30-42_label_B2-B1-0",
+   "duration_s": 16.0,
+   "stratum": "B2",
+   "labels": [
+    "B2",
+    "B1"
+   ]
+  },
+  {
+   "name": "Kingsman.The.Golden.Circle.2017__#00-41-22_00-41-32_label_B2-0-0",
+   "duration_s": 10.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "wangted.2008__#0-22-55_0-23-40_label_B2-0-0",
+   "duration_s": 45.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Rush.Hour.3.2007.BluRay__#00-40-56_00-41-52_label_B2-0-0",
+   "duration_s": 56.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "v=CLFYvG6MsZU__#00-02-16_00-05-06_label_B2-0-0",
+   "duration_s": 170.12,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "The.Bourne.Legacy.2012__#0-59-18_01-01-52_label_B2-B1-0",
+   "duration_s": 154.04,
+   "stratum": "B2",
+   "labels": [
+    "B2",
+    "B1"
+   ]
+  },
+  {
+   "name": "Fast.Five.2011__#00-32-56_00-33-26_label_B2-0-0",
+   "duration_s": 30.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "wangted.2008__#0-48-30_0-49-00_label_B2-0-0",
+   "duration_s": 30.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "City.Of.Men.2007__#01-35-30_01-36-00_label_B2-0-0",
+   "duration_s": 30.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Bullet.in.the.Head.1990__#01-26-30_01-27-34_label_B2-0-0",
+   "duration_s": 64.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Saving.Private.Ryan.1998__#02-25-42_02-26-03_label_B2-0-0",
+   "duration_s": 21.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Rush.Hour.1998.BluRay__#01-20-28_01-21-38_label_B2-0-0",
+   "duration_s": 70.08,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Taken.3.2014__#00-03-58_00-04-16_label_B2-0-0",
+   "duration_s": 18.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "City.Of.Men.2007__#00-57-37_00-58-27_label_B2-0-0",
+   "duration_s": 50.0,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Law.Abiding.Citizen.2009__#01-26-34_01-27-25_label_B2-0-0",
+   "duration_s": 51.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Black.Hawk.Down.2001__#01-13-59_01-14-49_label_B2-0-0",
+   "duration_s": 50.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Brick.Mansions.2014__#00-11-57_00-12-12_label_B2-0-0",
+   "duration_s": 15.0,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "City.Of.Men.2007__#00-51-50_00-53-31_label_B2-0-0",
+   "duration_s": 101.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Taken.3.2014__#01-12-48_01-14-30_label_B2-B1-0",
+   "duration_s": 102.04,
+   "stratum": "B2",
+   "labels": [
+    "B2",
+    "B1"
+   ]
+  },
+  {
+   "name": "God.Bless.America.2011__#01-32-00_01-32-50_label_B2-0-0",
+   "duration_s": 50.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Rush.Hour.1998.BluRay__#01-25-21_01-25-46_label_B2-0-0",
+   "duration_s": 25.08,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Rush.Hour.3.2007.BluRay__#00-04-59_00-05-31_label_B2-0-0",
+   "duration_s": 32.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "The.Hurt.Locker.2008__#0-19-22_0-22-32_label_B2-B1-0",
+   "duration_s": 190.04,
+   "stratum": "B2",
+   "labels": [
+    "B2",
+    "B1"
+   ]
+  },
+  {
+   "name": "Deadpool.2.2018__#0-04-46_0-05-01_label_B2-0-0",
+   "duration_s": 15.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Saving.Private.Ryan.1998__#00-47-50_00-49-35_label_B2-0-0",
+   "duration_s": 105.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Taken.2.UNRATED.EXTENDED.2012__#01-18-25_01-18-40_label_B2-0-0",
+   "duration_s": 15.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Bad.Boys.1995__#01-33-51_01-34-37_label_B2-0-0",
+   "duration_s": 46.0,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Skyfall.2012__#01-57-40_01-58-00_label_B2-0-0",
+   "duration_s": 20.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Shoot.Em.Up.2007__#00-53-25_00-56-47_label_B2-0-0",
+   "duration_s": 202.08,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "City.Of.Men.2007__#01-17-27_01-17-59_label_B2-0-0",
+   "duration_s": 32.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Mission.Impossible.Ghost.Protocol.2011__#00-01-18_00-01-40_label_B2-0-0",
+   "duration_s": 22.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "City.of.God.2002__#01-24-10_01-25-10_label_B2-0-0",
+   "duration_s": 60.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "The.Hurt.Locker.2008__#01-02-10_01-03-55_label_B2-0-0",
+   "duration_s": 105.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Kingsman.The.Secret.Service.2014__#00-22-10_00-23-10_label_B2-0-0",
+   "duration_s": 60.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Tropa.de.Elite.2.2010__#00-46-11_00-46-50_label_B2-0-0",
+   "duration_s": 39.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Fast.Furious.6.2013__#00-45-40_00-47-13_label_B2-0-0",
+   "duration_s": 93.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Brick.Mansions.2014__#01-02-00_01-02-43_label_B2-0-0",
+   "duration_s": 43.0,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Mission.Impossible.III.2006__#01-54-02_01-54-40_label_B2-0-0",
+   "duration_s": 38.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "The.Bourne.Identity.2002__#01-27-39_01-29-19_label_B2-0-0",
+   "duration_s": 100.0,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "City.of.God.2002__#00-40-16_00-41-30_label_B2-0-0",
+   "duration_s": 74.08,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Sin.City.2005__#0-43-45_0-44-01_label_B2-0-0",
+   "duration_s": 16.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Fast.Furious.2009__#01-29-10_01-29-55_label_B2-0-0",
+   "duration_s": 45.0,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Tropa.de.Elite.2.2010__#01-33-01_01-33-30_label_B2-0-0",
+   "duration_s": 29.08,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Sin.City.2005__#0-10-40_0-11-40_label_B2-0-0",
+   "duration_s": 60.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Shoot.Em.Up.2007__#00-56-56_00-57-15_label_B2-0-0",
+   "duration_s": 19.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Mission.Impossible.II.2000__#01-25-08_01-25-31_label_B2-0-0",
+   "duration_s": 23.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Bullet.in.the.Head.1990__#01-45-21_01-46-20_label_B2-0-0",
+   "duration_s": 59.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Mission.Impossible.III.2006__#00-19-56_00-20-26_label_B2-0-0",
+   "duration_s": 30.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "GoldenEye.1995__#01-17-05_01-19-57_label_B2-B1-0",
+   "duration_s": 172.04,
+   "stratum": "B2",
+   "labels": [
+    "B2",
+    "B1"
+   ]
+  },
+  {
+   "name": "God.Bless.America.2011__#00-12-40_00-13-12_label_B2-0-0",
+   "duration_s": 32.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Taken.2.UNRATED.EXTENDED.2012__#01-06-28_01-06-49_label_B2-0-0",
+   "duration_s": 21.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Black.Hawk.Down.2001__#02-00-12_02-01-29_label_B2-0-0",
+   "duration_s": 77.08,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Shoot.Em.Up.2007__#00-32-40_00-35-10_label_B2-0-0",
+   "duration_s": 150.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Rush.Hour.1998.BluRay__#00-11-05_00-12-10_label_B2-B1-0",
+   "duration_s": 65.08,
+   "stratum": "B2",
+   "labels": [
+    "B2",
+    "B1"
+   ]
+  },
+  {
+   "name": "Mission.Impossible.II.2000__#01-18-55_01-20-53_label_B2-0-0",
+   "duration_s": 118.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Spectre.2015__#01-10-35_01-10-53_label_B2-0-0",
+   "duration_s": 18.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Mission.Impossible.V.Rogue.Nation.2015__#00-17-27_00-17-55_label_B2-0-0",
+   "duration_s": 28.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Taken.2.UNRATED.EXTENDED.2012__#01-00-00_01-00-16_label_B2-0-0",
+   "duration_s": 16.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Sin.City.2005__#01-51-59_01-52-29_label_B2-0-0",
+   "duration_s": 30.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Mission.Impossible.V.Rogue.Nation.2015__#01-54-23_01-55-10_label_B2-0-0",
+   "duration_s": 47.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "The.Bourne.Ultimatum.2007__#01-44-02_01-44-11_label_B2-0-0",
+   "duration_s": 9.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Tropa.de.Elite.2.2010__#00-42-00_00-43-00_label_B2-0-0",
+   "duration_s": 60.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Operation.Red.Sea.2018__#0-02-17_0-02-37_label_B2-0-0",
+   "duration_s": 20.0,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Mindhunters.2004__#01-19-00_01-20-05_label_B2-0-0",
+   "duration_s": 65.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "Sin.City.2005__#0-29-34_0-29-56_label_B2-0-0",
+   "duration_s": 22.04,
+   "stratum": "B2",
+   "labels": [
+    "B2"
+   ]
+  },
+  {
+   "name": "v=tlFJIG9mTGQ__#00-12-00_00-15-00_label_A",
+   "duration_s": 180.08,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "New.Kids.Turbo.2010__#00-41-30_00-42-05_label_A",
+   "duration_s": 35.0,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "Spectre.2015__#01-17-22_01-18-53_label_A",
+   "duration_s": 91.0,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "Before.Sunrise.1995__#01-36-45_01-38-10_label_A",
+   "duration_s": 85.0,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "Hear.Me.2009__#00-30-50_00-32-31_label_A",
+   "duration_s": 101.04,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "v=GnN9VTh_s2A__#1_label_A",
+   "duration_s": 28.46,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "The.Bourne.Ultimatum.2007__#0-55-55_0-56-10_label_A",
+   "duration_s": 15.04,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "The.Notebook.2004__#00-11-00_00-15-08_label_A",
+   "duration_s": 248.08,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "Fast.Furious.2009__#01-08-33_01-10-18_label_A",
+   "duration_s": 105.04,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "v=H9Y5_X1sEEA__#00-30-00_00-33-00_label_A",
+   "duration_s": 180.12,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "v=enYITYwvPAQ__#00-27-00_00-30-00_label_A",
+   "duration_s": 180.04,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "The.Intouchables.2011__#00-58-18_01-02-30_label_A",
+   "duration_s": 252.04,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "Good.Will.Hunting.1997__#00-58-18_01-02-30_label_A",
+   "duration_s": 252.04,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "Love.Actually.2003__#01-04-40_01-06-59_label_A",
+   "duration_s": 139.0,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "v=QiLNvC7CIuY__#1_label_A",
+   "duration_s": 48.38,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "v=AqFWYZsOgWY__#00-33-00_00-36-00_label_A",
+   "duration_s": 180.08,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "The.Notebook.2004__#00-20-35_00-23-06_label_A",
+   "duration_s": 151.04,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "Before.Sunrise.1995__#00-42-52_00-45-31_label_A",
+   "duration_s": 159.04,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "v=VGP9qh7U4H0__#1_label_A",
+   "duration_s": 220.17,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "v=ErOcW_CSOyQ__#1_label_A",
+   "duration_s": 728.21,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "Be.with.You.2018__#00-16-18_00-18-09_label_A",
+   "duration_s": 111.04,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "God.Bless.America.2011__#01-23-13_01-25-31_label_A",
+   "duration_s": 138.04,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "Haywire.2011__#00-02-06_00-03-29_label_A",
+   "duration_s": 83.04,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "v=EToznHwS0OA__#1_label_A",
+   "duration_s": 155.42,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "The.Bourne.Ultimatum.2007__#01-32-57_01-33-53_label_A",
+   "duration_s": 56.04,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "Black.Hawk.Down.2001__#00-06-44_00-07-39_label_A",
+   "duration_s": 55.04,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "Be.with.You.2018__#01-14-30_01-16-59_label_A",
+   "duration_s": 149.04,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "v=0vVOXlgHC1U__#00-48-00_00-54-00_label_A",
+   "duration_s": 360.08,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "v=GrHfWKeTDEI__#1_label_A",
+   "duration_s": 211.08,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "Love.Death.and.Robots.S01E04__#00-14-28_00-15-27_label_A",
+   "duration_s": 59.0,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  },
+  {
+   "name": "Casino.Royale.2006__#00-28-10_00-30-10_label_A",
+   "duration_s": 120.04,
+   "stratum": "A",
+   "labels": [
+    "A"
+   ]
+  }
+ ],
+ "excluded": {
+  "out_of_scope": 314
+ },
+ "dataset": "XD-Violence test (videos folder of the Kaggle mirror, see data/SOURCES.md)",
+ "pool": 800
+}

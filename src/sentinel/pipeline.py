@@ -24,6 +24,8 @@ from sentinel.notify import Notifier
 from sentinel.scene import SceneBuilder
 from sentinel.schema import RiskResult, SceneDescription, Zone
 
+PERCEPTION_VERSION = "3.0"  # schema v3 features; frozen before the episode cache (session 03, step 2)
+
 
 class Aggregator(Protocol):
     def assess(self, scene: SceneDescription) -> RiskResult: ...
@@ -290,26 +292,40 @@ def people_agents(config: Config, files: dict[str, Path], device: str) -> tuple[
     return people, PoseEstimator(files["pose"], m.imgsz, pose.conf, rules, device)
 
 
-def build_pipeline(
-    config: Config, source_id: str, run_id: str, journal: Path | None, notifier: Notifier
-) -> Pipeline:
-    """The real pipeline: YOLO people + ByteTrack, YOLO-pose, weapon detector, aggregator A, key frames."""
+def build_agents(config: Config, record_weapons: bool = False) -> Agents:
+    """The perception agents with real models; `record_weapons` scores weapons down to weapons.record_conf."""
     from sentinel.agents.motion import PixelMotion
     from sentinel.agents.weapons import WeaponDetector
-    from sentinel.aggregators.rules import RulesAggregator
-    from sentinel.keyframe import KeyframeWriter
 
     m, w = config.models, config.weapons
     files, device = model_files(config), m.runtime_device
     people, poser = people_agents(config, files, device)
-    agents = Agents(
+    return Agents(
         people=people,
         poser=poser,
         weapons=WeaponDetector.from_weights(
-            files["weapons"], w.imgsz, w.conf, w.every_n_frames, w.class_map, w.mode, w.crop_pad, device
+            files["weapons"],
+            w.imgsz,
+            w.conf,
+            w.every_n_frames,
+            w.class_map,
+            w.mode,
+            w.crop_pad,
+            device,
+            record_conf=w.record_conf if record_weapons else None,
         ),
         motion=PixelMotion(config.motion.max_width, config.motion.threshold),
     )
+
+
+def build_pipeline(
+    config: Config, source_id: str, run_id: str, journal: Path | None, notifier: Notifier
+) -> Pipeline:
+    """The real pipeline: YOLO people + ByteTrack, YOLO-pose, weapon detector, aggregator A, key frames."""
+    from sentinel.aggregators.rules import RulesAggregator
+    from sentinel.keyframe import KeyframeWriter
+
+    agents = build_agents(config)
     keyframes = KeyframeWriter(config.incidents.output_dir, config.incidents.blur_faces)
     aggregator = RulesAggregator.from_config(config)
     return Pipeline(agents, aggregator, notifier, config, source_id, run_id, journal, keyframes)

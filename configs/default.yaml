@@ -33,6 +33,7 @@ weapons:                  # weapon detector (session 02: docs/bench/weapons_2026
   imgsz: 480
   conf: 0.30                # Sevilla Cam1+Cam5: frame recall 10.7 % at 1.3 % false frames
   every_n_frames: 2         # 1 or 2; in between the last boxes are kept
+  record_conf: 0.05         # episode cache: the model scores boxes down to this for the baseline (aux only)
   crop_pad: 0.25            # crops mode: square side = longer person-box side x (1 + crop_pad)
   class_map: {pistol: gun, rifle: gun, gun: gun, knife: knife}
 
