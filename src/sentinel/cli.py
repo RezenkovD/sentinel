@@ -1,10 +1,30 @@
 """Command-line interface: `sentinel run | bench | eval`."""
 
 import argparse
+import importlib
 from datetime import date
 from pathlib import Path
 
 from sentinel.config import DEFAULT_CONFIG, load_config
+
+# `sentinel eval <name> [args]` -> sentinel.eval.<module>.main(args); True = the script takes --config
+EVAL_COMMANDS = {
+    "build-episodes": ("build_episodes", False),
+    "weapons": ("weapons", False),
+    "sanity": ("sanity", True),
+    "people": ("people", True),
+}
+
+
+def eval_command(name: str, rest: list[str], config: Path) -> tuple[str, list[str]]:
+    """Module and arguments of an eval script; the top-level --config goes to scripts that take one."""
+    if name not in EVAL_COMMANDS:
+        raise SystemExit(f"unknown eval command {name!r}; choose from: {', '.join(EVAL_COMMANDS)}")
+    module, takes_config = EVAL_COMMANDS[name]
+    argv = list(rest)
+    if takes_config and "--config" not in argv:
+        argv = ["--config", str(config), *argv]
+    return f"sentinel.eval.{module}", argv
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -16,7 +36,9 @@ def build_parser() -> argparse.ArgumentParser:
     run = sub.add_parser("run", help="run the pipeline on a camera, RTSP stream or video file")
     run.add_argument("--source", required=True, help="video file, camera index (e.g. 0) or rtsp:// URL")
     run.add_argument("--paced", action="store_true", help="play a file at its own speed, like a live camera")
-    sub.add_parser("eval", help="run the experiment on dataset episodes")
+    ev = sub.add_parser("eval", help="dataset scripts: splits, episodes, training, experiment")
+    ev.add_argument("name", help=", ".join(EVAL_COMMANDS))
+    ev.add_argument("rest", nargs=argparse.REMAINDER, help="arguments of the eval script")
 
     bench = sub.add_parser("bench", help="measure processing speed (ms/frame, RTF)")
     bench.add_argument("--source", type=Path, nargs="+", required=True, help="video file(s)")
@@ -44,6 +66,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "eval":
+        module, script_argv = eval_command(args.name, args.rest, args.config)
+        result = importlib.import_module(module).main(script_argv)
+        return result if isinstance(result, int) else 0
     config = load_config(args.config)
     if args.command == "run":
         import json

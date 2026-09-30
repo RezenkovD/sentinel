@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from eval.weapons import Detection, average_precision, frame_rates, read_voc
+from sentinel.eval.weapons import Detection, average_precision, frame_rates, read_voc
 
 VOC = """<annotation><size><width>1920</width><height>1080</height></size>
 <object><name>Handgun</name><bndbox><xmin>10</xmin><ymin>20</ymin><xmax>30</xmax><ymax>40</ymax></bndbox></object>
@@ -68,7 +68,7 @@ def test_frame_recall_and_false_frame_share_per_threshold():
 
 
 def test_person_crop_is_a_padded_square_inside_the_frame():
-    from eval.weapons import person_crop
+    from sentinel.eval.weapons import person_crop
 
     # a 100 x 200 person in the middle of a 1920 x 1080 frame, 25 % padding -> 250 px square
     assert person_crop((900.0, 400.0, 1000.0, 600.0), (1080, 1920), pad=0.25) == (825, 375, 1075, 625)
@@ -77,7 +77,7 @@ def test_person_crop_is_a_padded_square_inside_the_frame():
 
 
 def test_detections_from_overlapping_crops_are_merged():
-    from eval.weapons import merge_detections
+    from sentinel.eval.weapons import merge_detections
 
     a = Detection("f", "gun", 0.9, (10.0, 10.0, 30.0, 30.0))
     b = Detection("f", "gun", 0.6, (11.0, 11.0, 31.0, 31.0))  # same gun seen in a second crop

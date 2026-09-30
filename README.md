@@ -37,10 +37,11 @@ uv run sentinel bench --source <clip>.avi [<clip>.avi …]            # люди
 uv run sentinel bench --paced --source <clip>.avi                   # те саме в темпі живої камери
 uv run sentinel bench --pipeline 480:1 640:2 crops320:2 --source …  # повний конвеєр; варіанти детектора зброї
 uv run --with openvino sentinel bench --pipeline 480:1 --format openvino --source …   # те саме на OpenVINO
-uv run python -m eval.build_episodes        # поділи наборів → data/splits/
-uv run python -m eval.weapons               # вибір ваг детектора зброї на кадрах Севільї
-uv run python -m eval.sanity --per-class 20 # санітарна перевірка конвеєра на нашому train RWF
-uv run python -m eval.sanity --make-videos  # склейки для перевірки в темпі камери (потрібен ffmpeg)
+uv run sentinel eval build-episodes         # поділи наборів → data/splits/
+uv run sentinel eval weapons                # вибір ваг детектора зброї на кадрах Севільї
+uv run sentinel eval sanity --per-class 20  # санітарна перевірка конвеєра на нашому train RWF
+uv run sentinel eval sanity --make-videos   # склейки для перевірки в темпі камери (потрібен ffmpeg)
+uv run sentinel eval people                 # проксі «людей на кадр» для детекторів людей
 ```
 
 Експеримент (`sentinel eval`) ще не реалізовано.

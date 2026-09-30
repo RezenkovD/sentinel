@@ -1,7 +1,7 @@
 """Person detector check: how many people each model finds on the same clips (RWF has no person boxes, so
 the count of confirmed tracks per frame is a proxy for recall).
 
-    uv run python -m eval.people --per-class 20
+    uv run sentinel eval people --per-class 20
 """
 
 import argparse
@@ -10,9 +10,9 @@ from pathlib import Path
 
 import numpy as np
 
-from eval.sanity import pick_clips
 from sentinel.agents.detector import PersonTracker
 from sentinel.config import DEFAULT_CONFIG, load_config
+from sentinel.eval.sanity import pick_clips
 from sentinel.io.source import LatestFrameReader
 
 MODELS = ("weights/yolo11n.pt", "weights/yolo26n.pt")

@@ -1,6 +1,6 @@
 from collections import Counter
 
-from eval.build_episodes import Clip, source_group, split_rwf2000
+from sentinel.eval.build_episodes import Clip, source_group, split_rwf2000
 
 
 def test_source_group_drops_the_segment_index():

@@ -1,6 +1,6 @@
 """Datasets -> splits (and, later, episodes).
 
-Run from the repository root: `uv run python -m eval.build_episodes` writes data/splits/*.json.
+Run from the repository root: `uv run sentinel eval build-episodes` writes data/splits/*.json.
 
 RWF-2000 (decision 29.09): the original `val` (400 clips) is our test, untouched until the experiment;
 the original `train` (1600) becomes our train / val 80/20, stratified by class with a fixed seed.

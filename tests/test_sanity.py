@@ -1,6 +1,6 @@
 import json
 
-from eval.sanity import window_records
+from sentinel.eval.sanity import window_records
 
 
 def test_window_records_skip_the_end_of_stream_line():

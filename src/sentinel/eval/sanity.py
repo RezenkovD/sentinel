@@ -1,6 +1,6 @@
 """Sanity check of the whole pipeline on our RWF-2000 train split (not the experiment, SPEC §9 / session 02).
 
-    uv run python -m eval.sanity --per-class 20        # (a) N Fight + N NonFight clips in offline mode
+    uv run sentinel eval sanity --per-class 20        # (a) N Fight + N NonFight clips in offline mode
 
 Loads the models once and resets tracks, windows and incident state between clips. Writes everything
 under results/sanity_<time>/: journal.jsonl (every window), incidents.jsonl, key frames, summary.json.

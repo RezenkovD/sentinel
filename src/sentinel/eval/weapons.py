@@ -1,7 +1,7 @@
 """Choosing the weapon detector: candidates on the Sevilla frames of Cam1 + Cam5 (decision 29.09).
 
 Run from the repository root:
-    uv run python -m eval.weapons [--imgsz 480 640]
+    uv run sentinel eval weapons [--imgsz 480 640]
 
 For every candidate and input size the frames are predicted once with a low confidence (predictions cached in
 results/weapons/*.jsonl), then:
