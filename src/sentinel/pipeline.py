@@ -118,6 +118,8 @@ class Pipeline:
         timing["weapons"] = _ms_since(started)
         started = time.perf_counter()
         motion = None if self.agents.motion is None else self.agents.motion.update(frame.image, tracks)
+        timing["motion"] = _ms_since(started)
+        started = time.perf_counter()
         scene = self.builder.add(frame.t, tracks, skeletons, weapons, weapon_run, motion)
         timing["scene"] = _ms_since(started)
         events = []

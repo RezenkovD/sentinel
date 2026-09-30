@@ -134,7 +134,7 @@ def test_last_frame_stage_times_are_exposed_for_the_bench(tmp_path: Path):
         keyframes=RecordKeyframes(),
     )
     pipeline.process(Frame(image=np.zeros((10, 10, 3), dtype=np.uint8), t=0.0, index=0))
-    assert set(pipeline.last_timing_ms) == {"people", "pose", "weapons", "scene", "decision"}
+    assert set(pipeline.last_timing_ms) == {"people", "pose", "weapons", "motion", "scene", "decision"}
 
 
 class PoseWithBystander(NoSkeletons):

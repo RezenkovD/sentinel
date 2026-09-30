@@ -135,11 +135,11 @@ def _relative_series(
 
 
 def _derivatives(
-    series: list[tuple[float, np.ndarray]], cfg: FeatureConfig
+    series: list[tuple[float, np.ndarray]], cfg: FeatureConfig, with_acceleration: bool
 ) -> list[tuple[float, np.ndarray | None, np.ndarray | None]]:
     """(t, velocity, acceleration) at every point from local least-squares fits over up to smooth_points
     neighbours (a line for the velocity from 3 points, a parabola for the acceleration from 4), using the real
-    time stamps and never reaching across a gap longer than max_gap_s."""
+    time stamps and never reaching across a gap longer than max_gap_s. Vectorised over the points."""
     half = cfg.smooth_points // 2
     segments: list[list[tuple[float, np.ndarray]]] = []
     for t, p in series:
@@ -147,20 +147,45 @@ def _derivatives(
             segments.append([])
         segments[-1].append((t, p))
     out = []
+    offsets = np.arange(-half, half + 1)
     for segment in segments:
         ts = np.array([t for t, _ in segment])
         ps = np.array([p for _, p in segment])
-        for j in range(len(segment)):
-            lo, hi = max(0, j - half), min(len(segment), j + half + 1)
-            dt = ts[lo:hi] - ts[j]
-            velocity = acceleration = None
-            if hi - lo >= 3:
-                velocity = np.linalg.lstsq(np.vander(dt, 2, increasing=True), ps[lo:hi], rcond=None)[0][1]
-            if hi - lo >= 4:
-                acceleration = (
-                    2 * np.linalg.lstsq(np.vander(dt, 3, increasing=True), ps[lo:hi], rcond=None)[0][2]
+        n = len(segment)
+        idx = np.arange(n)[:, None] + offsets[None, :]  # (n, w) neighbours of every point
+        valid = (idx >= 0) & (idx < n)
+        idx = np.clip(idx, 0, n - 1)
+        w = valid.astype(float)
+        count = valid.sum(axis=1)
+        dt = np.where(valid, ts[idx] - ts[:, None], 0.0)
+        pts = ps[idx] * w[..., None]  # (n, w, 2), zero where invalid
+        # line: slope = cov(dt, p) / var(dt) over the valid neighbours
+        mean_dt = dt.sum(axis=1) / count
+        mean_p = pts.sum(axis=1) / count[:, None]
+        ddt = (dt - mean_dt[:, None]) * w
+        var = (ddt**2).sum(axis=1)
+        cov = (ddt[..., None] * (pts - mean_p[:, None, :] * w[..., None])).sum(axis=1)
+        velocity_ok = (count >= 3) & (var > 0)
+        velocity = np.zeros((n, 2))
+        velocity[velocity_ok] = cov[velocity_ok] / var[velocity_ok, None]
+        acceleration = np.zeros((n, 2))
+        acceleration_ok = np.zeros(n, dtype=bool)
+        if with_acceleration:
+            design = np.stack([w, dt, dt**2], axis=-1)  # rows of invalid neighbours are zero
+            acceleration_ok = count >= 4
+            if acceleration_ok.any():
+                a = design[acceleration_ok]
+                normal = a.transpose(0, 2, 1) @ a
+                rhs = a.transpose(0, 2, 1) @ pts[acceleration_ok]
+                acceleration[acceleration_ok] = 2 * np.linalg.solve(normal, rhs)[:, 2, :]
+        for j in range(n):
+            out.append(
+                (
+                    ts[j],
+                    velocity[j] if velocity_ok[j] else None,
+                    acceleration[j] if acceleration_ok[j] else None,
                 )
-            out.append((ts[j], velocity, acceleration))
+            )
     return out
 
 
@@ -174,7 +199,8 @@ def pose_kinematics(obs: Sequence[Observation], h: float, cfg: FeatureConfig, t_
     for index in range(17):
         if index in (LEFT_SHOULDER, RIGHT_SHOULDER):
             continue
-        for t, velocity, acceleration in _derivatives(_relative_series(obs, index, cfg), cfg):
+        wrist = index in (LEFT_WRIST, RIGHT_WRIST)
+        for t, velocity, acceleration in _derivatives(_relative_series(obs, index, cfg), cfg, wrist):
             if t < t_min - 1e-9:
                 continue
             if velocity is not None:
