@@ -46,9 +46,9 @@
 
 ## Залежності — мінімум (це вимога)
 
-- Runtime: `ultralytics`, `pydantic`, `scikit-learn`, `python-dotenv`. numpy, opencv, requests, pyyaml приходять з ultralytics — користуйся ними.
+- Runtime: `ultralytics`, `pydantic`, `scikit-learn`, `python-dotenv`, `openvino` (бекенд моделей, рішення 30.09),
+  `lap` (потрібен ByteTrack в ultralytics, рішення 29.09). numpy, opencv, requests, pyyaml приходять з ultralytics — користуйся ними.
 - Dev: `pytest`, `ruff`.
-- Кандидат: `openvino` — лише якщо без нього RTF > 1; рішення приймається за цифрами зі звіту. До того — `uv run --with openvino` для разових замірів.
 - Заборонено: LangChain, LangGraph, Streamlit, python-telegram-bot, aiogram, SDK LLM-провайдерів (openai, google-genai тощо),
   бази даних, веб-фреймворки, click/typer (CLI — `argparse`).
 - Telegram і LLM — прямі HTTP-запити через `requests`. LLM-провайдери OpenAI-сумісні: `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY` у `.env`.

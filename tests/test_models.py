@@ -100,3 +100,25 @@ def test_openvino_telemetry_has_no_consent_during_export():
             app_name="sentinel-test", app_version="0", tid="none", enable_opt_in_dialog=False
         )
         assert telemetry.consent is False
+
+
+def test_openvino_telemetry_is_off_by_the_environment_set_at_import():
+    """Decision 30.09 (report 03), item 11: project scope, environment at import, no user settings touched.
+    The OpenVINO converter declines telemetry in CI (`disable_in_ci=True`), so `CI=true` is set for us."""
+    import openvino_telemetry
+
+    import sentinel  # noqa: F401
+
+    assert os.environ["CI"] == "true"
+    telemetry = openvino_telemetry.Telemetry(
+        app_name="sentinel-test", app_version="0", tid="none", enable_opt_in_dialog=False, disable_in_ci=True
+    )
+    telemetry.init(  # the class is a singleton: set it up the way the converter does
+        tid="none",
+        app_name="sentinel-test",
+        app_version="0",
+        backend="ga4",
+        enable_opt_in_dialog=False,
+        disable_in_ci=True,
+    )
+    assert telemetry.consent is False
