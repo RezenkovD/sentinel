@@ -30,21 +30,38 @@ uv run sentinel run --source 0                     # вебкамера; так�
 Без `TELEGRAM_TOKEN` і `TELEGRAM_CHAT_IDS` у `.env` сповіщення йдуть у консоль і `results/incidents.jsonl`.
 Демонстрацію й заміри запускати лише від мережі, у профілі `powerprofilesctl set performance`.
 
+Моделі на OpenVINO (`models.backend: openvino`) потребують разового експорту; він перегенеровується, коли
+змінюються ваги:
+
+```bash
+uv run sentinel export
+```
+
 Заміри й перевірки:
 
 ```bash
 uv run sentinel bench --source <clip>.avi [<clip>.avi …]            # люди + поза: мс/кадр, RTF
 uv run sentinel bench --paced --source <clip>.avi                   # те саме в темпі живої камери
 uv run sentinel bench --pipeline 480:1 640:2 crops320:2 --source …  # повний конвеєр; варіанти детектора зброї
-uv run --with openvino sentinel bench --pipeline 480:1 --format openvino --source …   # те саме на OpenVINO
+uv run sentinel bench --pipeline 480:2 --format openvino --source …   # те саме на OpenVINO
+uv run sentinel bench --pipeline 480:2 640:2 --quiet --people detect:weights/yolo11n.pt --backends openvino torch --source …
+                                            # чекає тихого вікна, шумні прогони повторює (сесія 03)
 uv run sentinel eval build-episodes         # поділи наборів → data/splits/
 uv run sentinel eval weapons                # вибір ваг детектора зброї на кадрах Севільї
 uv run sentinel eval sanity --per-class 20  # санітарна перевірка конвеєра на нашому train RWF
 uv run sentinel eval sanity --make-videos   # склейки для перевірки в темпі камери (потрібен ffmpeg)
-uv run sentinel eval people                 # проксі «людей на кадр» для детекторів людей
+uv run sentinel eval people                 # проксі «людей на кадр» для джерел людей
+uv run sentinel eval xd-subset              # підвибірка тесту XD-Violence → data/splits/xd_subset.json
+uv run sentinel eval extract --plan all     # кеш описів сцени: RWF train+val → test → Севілья → XD (відновлюване)
+uv run sentinel eval feature-auc            # одновимірні AUC ознак A на кеші
+uv run sentinel eval train-a                # навчання A (train), вибір C, оцінки епізоду й порогів (val)
+uv run sentinel eval weapon-rule            # правило «зброя в руці» на кеші: Севілья dev і NonFight train
+uv run sentinel eval baselines              # пороги baseline_weapon і baseline_motion
 ```
 
-Експеримент (`sentinel eval`) ще не реалізовано.
+Кеш описів сцени — `data/episodes/<набір>/<епізод>.jsonl` (поза git): перший рядок — метадані (версії схеми й
+сприйняття, хеш налаштувань), далі рядок на вікно: опис сцени й службове `aux`, якого агрегатори не бачать.
+Повний експеримент (`sentinel eval` для A / B / каскаду) — наступні сесії.
 
 Налаштування (частота аналізу, розмір входу, пороги, ваги A, автомат інцидентів) — `configs/default.yaml`,
 трекер — `configs/bytetrack.yaml`, зони — `configs/zones.yaml`. Журнал рішень — [`docs/DECISIONS.md`](docs/DECISIONS.md).
