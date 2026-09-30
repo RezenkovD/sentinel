@@ -11,12 +11,12 @@ DEFAULT = Path(__file__).parents[1] / "configs" / "default.yaml"
 def test_shipped_default_config_is_valid():
     config = load_config(DEFAULT)
     assert 8 <= config.analysis.fps <= 10  # SPEC, section 6
-    assert config.models.person.weights.name.endswith(".pt")
+    assert config.models.people.weights.name.endswith(".pt")
 
 
 def test_tracker_settings_are_versioned_with_the_project():
     # Tracker thresholds belong to configs/, not to whatever the installed Ultralytics ships.
-    tracker = Path(load_config(DEFAULT).models.person.tracker)
+    tracker = Path(load_config(DEFAULT).models.people.tracker)
     assert tracker.parent.name == "configs"
     assert (DEFAULT.parents[1] / tracker).is_file()
 

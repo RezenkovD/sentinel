@@ -13,6 +13,7 @@ dependencies = [
     # Pulled in by ultralytics anyway; listed explicitly only to pin them to the CPU-only index below.
     "torch",
     "torchvision",
+    "openvino>=2026.4.0",
 ]
 
 [project.scripts]

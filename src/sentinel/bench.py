@@ -417,16 +417,6 @@ def render_report(
     return "\n".join(lines)
 
 
-def export_openvino(weights: Path) -> Path:
-    """Export an Ultralytics .pt checkpoint to OpenVINO IR once (dynamic input shape, so any imgsz works)."""
-    from ultralytics import YOLO
-
-    out = weights.with_name(f"{weights.stem}_openvino_model")
-    if not (out / f"{weights.stem}.xml").exists():
-        YOLO(str(weights)).export(format="openvino", dynamic=True, half=False)
-    return out
-
-
 def run_bench(
     sources: Sequence[Path],
     det_weights: Path,
@@ -464,7 +454,12 @@ def run_bench(
         import openvino
 
         label = f"openvino {openvino.__version__.split('-')[0]}"
-        det_weights, pose_weights = export_openvino(det_weights), export_openvino(pose_weights)
+        from sentinel.models import resolve_weights
+
+        det_weights, pose_weights = (
+            resolve_weights(det_weights, backend),
+            resolve_weights(pose_weights, backend),
+        )
 
     def after_warmup() -> None:
         # Ultralytics resets torch threads when a predictor is set up (during warm-up), so set them after.
@@ -517,16 +512,6 @@ class WeaponVariant:
     @property
     def label(self) -> str:
         return f"{'crops' if self.mode == 'crops' else ''}{self.imgsz}:{self.every_n_frames}"
-
-
-def with_openvino(config, export: Callable[[Path], Path] = export_openvino):
-    """The same config with people, pose and weapon models swapped for their OpenVINO exports on intel:cpu."""
-    m = config.models
-    person = m.person.model_copy(update={"weights": export(m.person.weights)})
-    pose = m.pose.model_copy(update={"weights": export(m.pose.weights)})
-    models = m.model_copy(update={"person": person, "pose": pose, "device": "intel:cpu"})
-    weapons = config.weapons.model_copy(update={"weights": export(config.weapons.weights)})
-    return config.model_copy(update={"models": models, "weapons": weapons})
 
 
 class _NoNotifier:
@@ -602,7 +587,7 @@ def run_pipeline_bench(
         print(json.dumps(rows[-1]), flush=True)
     report = {
         "power": asdict(power),
-        "device": config.models.device,
+        "device": config.models.runtime_device,
         "fps": fps,
         "clips": [s.name for s in sources],
         "warmup": warmup,

@@ -40,6 +40,8 @@ def build_parser() -> argparse.ArgumentParser:
     ev.add_argument("name", help=", ".join(EVAL_COMMANDS))
     ev.add_argument("rest", nargs=argparse.REMAINDER, help="arguments of the eval script")
 
+    sub.add_parser("export", help="export the config's models to OpenVINO (skipped while up to date)")
+
     bench = sub.add_parser("bench", help="measure processing speed (ms/frame, RTF)")
     bench.add_argument("--source", type=Path, nargs="+", required=True, help="video file(s)")
     bench.add_argument(
@@ -79,15 +81,19 @@ def main(argv: list[str] | None = None) -> int:
         summary = run_source(config, args.source, args.paced)
         print(json.dumps(summary, ensure_ascii=False))
         return 1 if summary["source_error"] or summary["source_lost"] else 0
+    if args.command == "export":
+        from sentinel.models import export_openvino, weights_to_export
+
+        for pt in weights_to_export(config):
+            print(f"{pt} -> {export_openvino(pt)}")
+        return 0
     if args.command == "bench" and args.pipeline:
         from sentinel.bench import WeaponVariant, run_pipeline_bench
 
         out = args.out or Path("results") / f"bench_pipeline_{date.today().isoformat()}.md"
         variants = [WeaponVariant.parse(v) for v in args.pipeline]
-        if args.format == "openvino":  # needs `uv run --with openvino`; not a project dependency
-            from sentinel.bench import with_openvino
-
-            config = with_openvino(config)
+        models = config.models.model_copy(update={"backend": args.format})
+        config = config.model_copy(update={"models": models})
         warmup = config.bench.warmup_frames if args.warmup is None else args.warmup
         print(f"report: {run_pipeline_bench(config, args.source, variants, warmup, out)}")
         return 0
@@ -95,7 +101,7 @@ def main(argv: list[str] | None = None) -> int:
         from sentinel.agents.pose_features import MatchRules
         from sentinel.bench import run_bench
 
-        det, pose = args.weights or (config.models.person.weights, config.models.pose.weights)
+        det, pose = args.weights or (config.models.people.weights, config.models.pose.weights)
         out = run_bench(
             sources=args.source,
             det_weights=det,
@@ -106,8 +112,8 @@ def main(argv: list[str] | None = None) -> int:
             fps_list=args.fps or config.bench.fps,
             warmup=config.bench.warmup_frames if args.warmup is None else args.warmup,
             threads=args.threads or config.models.threads,
-            person_conf=config.models.person.conf,
-            tracker_cfg=config.models.person.tracker,
+            person_conf=config.models.people.conf,
+            tracker_cfg=config.models.people.tracker,
             pose_conf=config.models.pose.conf,
             pose_rules=MatchRules(
                 min_iou=config.models.pose.min_iou,

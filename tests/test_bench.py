@@ -239,14 +239,34 @@ def test_weapon_variants_are_parsed_from_the_command_line():
         WeaponVariant.parse("640")
 
 
-def test_openvino_run_swaps_all_three_models_and_the_device():
-    from sentinel.bench import with_openvino
+def _fake_export(pt: Path) -> None:
+    out = pt.with_name(f"{pt.stem}_openvino_model")
+    out.mkdir()
+    (out / f"{pt.stem}.xml").write_text("<net/>")
+
+
+def test_openvino_backend_loads_the_exports_of_all_three_models(tmp_path: Path):
     from sentinel.config import DEFAULT_CONFIG, load_config
+    from sentinel.models import export_openvino
+    from sentinel.pipeline import model_files
 
     config = load_config(Path(__file__).parents[1] / DEFAULT_CONFIG)
-    exported = with_openvino(config, export=lambda p: p.with_name(f"{p.stem}_openvino_model"))
-    assert exported.models.person.weights.name == "yolo26n_openvino_model"
-    assert exported.models.pose.weights.name == "yolo26n-pose_openvino_model"
-    assert exported.weapons.weights.name == "best_openvino_model"
-    assert exported.models.device == "intel:cpu"
-    assert config.models.device == "cpu"  # the original config is untouched
+    people, pose, weapons = tmp_path / "people.pt", tmp_path / "pose.pt", tmp_path / "best.pt"
+    for pt in (people, pose, weapons):
+        pt.write_bytes(pt.name.encode())
+        export_openvino(pt, _fake_export)
+    models = config.models.model_copy(
+        update={
+            "backend": "openvino",
+            "people": config.models.people.model_copy(update={"weights": people}),
+            "pose": config.models.pose.model_copy(update={"weights": pose}),
+        }
+    )
+    cfg = config.model_copy(
+        update={"models": models, "weapons": config.weapons.model_copy(update={"weights": weapons})}
+    )
+    assert {role: p.name for role, p in model_files(cfg).items()} == {
+        "people": "people_openvino_model",
+        "pose": "pose_openvino_model",
+        "weapons": "best_openvino_model",
+    }

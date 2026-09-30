@@ -205,6 +205,15 @@ def drive(reader: Any, pipeline: Any, mode: str) -> DriveResult:
     return DriveResult(frames, incidents, error, lost)
 
 
+def model_files(config: Config) -> dict[str, Path]:
+    """People, pose and weapon model files for the configured backend (OpenVINO: up-to-date exports)."""
+    from sentinel.models import resolve_weights
+
+    m = config.models
+    paths = {"people": m.people.weights, "pose": m.pose.weights, "weapons": config.weapons.weights}
+    return {role: resolve_weights(path, m.backend) for role, path in paths.items()}
+
+
 def build_pipeline(
     config: Config, source_id: str, run_id: str, journal: Path | None, notifier: Notifier
 ) -> Pipeline:
@@ -216,17 +225,18 @@ def build_pipeline(
     from sentinel.keyframe import KeyframeWriter
 
     m, w, pose = config.models, config.weapons, config.models.pose
+    files, device = model_files(config), m.runtime_device
     agents = Agents(
-        people=PersonTracker(m.person.weights, m.imgsz, m.person.conf, m.person.tracker, m.device),
+        people=PersonTracker(files["people"], m.imgsz, m.people.conf, m.people.tracker, device),
         poser=PoseEstimator(
-            pose.weights,
+            files["pose"],
             m.imgsz,
             pose.conf,
             MatchRules(pose.min_iou, pose.min_inside, pose.keypoint_conf, pose.box_margin),
-            m.device,
+            device,
         ),
         weapons=WeaponDetector.from_weights(
-            w.weights, w.imgsz, w.conf, w.every_n_frames, w.class_map, w.mode, w.crop_pad, m.device
+            files["weapons"], w.imgsz, w.conf, w.every_n_frames, w.class_map, w.mode, w.crop_pad, device
         ),
     )
     keyframes = KeyframeWriter(config.incidents.output_dir, config.incidents.blur_faces)

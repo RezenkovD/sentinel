@@ -9,10 +9,11 @@ analysis:
   window_s: 1.0           # one scene description per window
 
 models:
-  device: cpu
+  backend: torch          # torch | openvino (run `sentinel export` first); decision 30.09.1
+  device: cpu             # cpu | gpu (integrated Intel GPU, OpenVINO only)
   imgsz: 480              # people + pose input size (decision 29.09, docs/DECISIONS.md)
   threads: null           # torch intra-op threads; null = leave the Ultralytics default (8)
-  person:
+  people:
     weights: weights/yolo26n.pt
     conf: 0.1             # low on purpose: ByteTrack also uses low-score boxes (Ultralytics track default)
     tracker: configs/bytetrack.yaml

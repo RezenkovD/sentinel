@@ -25,7 +25,7 @@ class AnalysisConfig(_Section):
     window_s: float = Field(gt=0)
 
 
-class PersonModelConfig(_Section):
+class PeopleModelConfig(_Section):
     weights: Path
     conf: float = Field(ge=0, le=1)
     tracker: str
@@ -41,11 +41,23 @@ class PoseModelConfig(_Section):
 
 
 class ModelsConfig(_Section):
-    device: str
+    backend: Literal["torch", "openvino"]
+    device: Literal["cpu", "gpu"]  # gpu: the integrated Intel GPU, OpenVINO only
     imgsz: int = Field(gt=0)
     threads: int | None = Field(default=None, gt=0)
-    person: PersonModelConfig
+    people: PeopleModelConfig
     pose: PoseModelConfig
+
+    @model_validator(mode="after")
+    def _device(self) -> "ModelsConfig":
+        if self.backend == "torch" and self.device != "cpu":
+            raise ValueError("the torch backend runs on the CPU only (no CUDA on this machine)")
+        return self
+
+    @property
+    def runtime_device(self) -> str:
+        """Device string for Ultralytics: cpu (PyTorch) or intel:cpu / intel:gpu (OpenVINO)."""
+        return "cpu" if self.backend == "torch" else f"intel:{self.device}"
 
 
 class WeaponsConfig(_Section):
