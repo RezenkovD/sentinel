@@ -1,0 +1,1413 @@
+{
+ "rule": "Sevilla Cam1 + Cam5 split by segments; hard negatives from our RWF train NonFight only; never Cam7, never the RWF test",
+ "seed": 2026,
+ "sevilla_segments": {
+  "train": [
+   "Cam1-From09-23-00To10-03-25_Segment_1_x264",
+   "Cam1-From09-23-00To10-03-25_Segment_3_x264",
+   "Cam1-From09-23-00To10-03-25_Segment_4_x264",
+   "Cam1-From09-23-00To10-03-25_Segment_5_x264",
+   "Cam5-From09-24-18To09-26-43-Guns_x264_Segment_0_x264",
+   "Cam5-From09-24-18To09-26-43-Guns_x264_Segment_1_x264",
+   "Cam5-From09-27-50To09-29-30-Guns_x264",
+   "Cam5-From09-32-26To09-33-10-Guns_x264",
+   "Cam5-From09-46-24To09-47-02_x264",
+   "Cam5-From09-47-49To09-48-30_x264"
+  ],
+  "val": [
+   "Cam1-From09-23-00To10-03-25_Segment_0_x264",
+   "Cam1-From09-23-00To10-03-25_Segment_2_x264",
+   "Cam5-From09-30-04To09-30-42-Guns_x264"
+  ]
+ },
+ "hard_negatives": {
+  "min_conf": 0.3,
+  "windows": [
+   {
+    "clip": "train/NonFight/0TP13Nyn_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.38403624296188354
+   },
+   {
+    "clip": "train/NonFight/0_DzLlklZa0_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.34394392371177673
+   },
+   {
+    "clip": "train/NonFight/0_DzLlklZa0_1.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.5350077152252197
+   },
+   {
+    "clip": "train/NonFight/0_DzLlklZa0_2.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.5021588802337646
+   },
+   {
+    "clip": "train/NonFight/1OXrIaQK_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.40832605957984924
+   },
+   {
+    "clip": "train/NonFight/1oEbrZhr_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.4522607922554016
+   },
+   {
+    "clip": "train/NonFight/1tU4kxa51vw_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.3177839517593384
+   },
+   {
+    "clip": "train/NonFight/1tU4kxa51vw_2.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.31819748878479004
+   },
+   {
+    "clip": "train/NonFight/1tU4kxa51vw_2.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.4497295022010803
+   },
+   {
+    "clip": "train/NonFight/1tU4kxa51vw_2.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.36222243309020996
+   },
+   {
+    "clip": "train/NonFight/1tU4kxa51vw_2.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.34584900736808777
+   },
+   {
+    "clip": "train/NonFight/3Edebh8P_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.32016468048095703
+   },
+   {
+    "clip": "train/NonFight/3Edebh8P_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.30091455578804016
+   },
+   {
+    "clip": "train/NonFight/3ZY4hpms_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.4368501901626587
+   },
+   {
+    "clip": "train/NonFight/3ZY4hpms_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.4759937524795532
+   },
+   {
+    "clip": "train/NonFight/3ZY4hpms_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.5087136030197144
+   },
+   {
+    "clip": "train/NonFight/3ZY4hpms_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.41662171483039856
+   },
+   {
+    "clip": "train/NonFight/3ZY4hpms_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.3565591871738434
+   },
+   {
+    "clip": "train/NonFight/3pRrZ9TS_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.32381731271743774
+   },
+   {
+    "clip": "train/NonFight/3pRrZ9TS_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.33064180612564087
+   },
+   {
+    "clip": "train/NonFight/3pRrZ9TS_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.3445281982421875
+   },
+   {
+    "clip": "train/NonFight/4HH7yMU8y9A_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.6038466095924377
+   },
+   {
+    "clip": "train/NonFight/4HH7yMU8y9A_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.5972713828086853
+   },
+   {
+    "clip": "train/NonFight/4HH7yMU8y9A_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.6100078821182251
+   },
+   {
+    "clip": "train/NonFight/4HH7yMU8y9A_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.5580590963363647
+   },
+   {
+    "clip": "train/NonFight/4HH7yMU8y9A_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.6861228942871094
+   },
+   {
+    "clip": "train/NonFight/4HH7yMU8y9A_1.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.7067012786865234
+   },
+   {
+    "clip": "train/NonFight/4HH7yMU8y9A_1.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.6155415773391724
+   },
+   {
+    "clip": "train/NonFight/4HH7yMU8y9A_1.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.6787617206573486
+   },
+   {
+    "clip": "train/NonFight/4HH7yMU8y9A_3.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.6127657294273376
+   },
+   {
+    "clip": "train/NonFight/4HH7yMU8y9A_3.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.5014797449111938
+   },
+   {
+    "clip": "train/NonFight/4yTlGiDoxBo_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.6295604705810547
+   },
+   {
+    "clip": "train/NonFight/4yTlGiDoxBo_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.34796279668807983
+   },
+   {
+    "clip": "train/NonFight/4yTlGiDoxBo_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.32111406326293945
+   },
+   {
+    "clip": "train/NonFight/4yTlGiDoxBo_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.47226107120513916
+   },
+   {
+    "clip": "train/NonFight/4yTlGiDoxBo_1.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.3257110118865967
+   },
+   {
+    "clip": "train/NonFight/5RayT2Vy0EA_2.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.39422133564949036
+   },
+   {
+    "clip": "train/NonFight/5z1f5blMBdk_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.4170593023300171
+   },
+   {
+    "clip": "train/NonFight/5z1f5blMBdk_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.6943744421005249
+   },
+   {
+    "clip": "train/NonFight/6Dej3-k3MRE_1.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.32437750697135925
+   },
+   {
+    "clip": "train/NonFight/6b254l7P_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.3643122911453247
+   },
+   {
+    "clip": "train/NonFight/6b254l7P_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.42681628465652466
+   },
+   {
+    "clip": "train/NonFight/6b254l7P_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.35038599371910095
+   },
+   {
+    "clip": "train/NonFight/6b254l7P_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.3437653183937073
+   },
+   {
+    "clip": "train/NonFight/7qtRgyFsk3s_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.5151751041412354
+   },
+   {
+    "clip": "train/NonFight/7qtRgyFsk3s_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.30963680148124695
+   },
+   {
+    "clip": "train/NonFight/7qtRgyFsk3s_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.5286623239517212
+   },
+   {
+    "clip": "train/NonFight/7qtRgyFsk3s_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.6150699853897095
+   },
+   {
+    "clip": "train/NonFight/80ySNph9_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.33732354640960693
+   },
+   {
+    "clip": "train/NonFight/8U6x0VMW_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.39247509837150574
+   },
+   {
+    "clip": "train/NonFight/9U8J4abJGDg_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.3327018916606903
+   },
+   {
+    "clip": "train/NonFight/AF4Rk1I2_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.5154852271080017
+   },
+   {
+    "clip": "train/NonFight/AF4Rk1I2_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.37580668926239014
+   },
+   {
+    "clip": "train/NonFight/Assault009_x264_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.49071717262268066
+   },
+   {
+    "clip": "train/NonFight/Assault009_x264_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.5328589677810669
+   },
+   {
+    "clip": "train/NonFight/Assault009_x264_1.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.4561974108219147
+   },
+   {
+    "clip": "train/NonFight/Assault011_x264_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.32666483521461487
+   },
+   {
+    "clip": "train/NonFight/Assault011_x264_1.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.5349096059799194
+   },
+   {
+    "clip": "train/NonFight/Assault011_x264_1.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.32343050837516785
+   },
+   {
+    "clip": "train/NonFight/B6DO4tXb_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.39914751052856445
+   },
+   {
+    "clip": "train/NonFight/B6DO4tXb_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.708877682685852
+   },
+   {
+    "clip": "train/NonFight/B6DO4tXb_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.6000479459762573
+   },
+   {
+    "clip": "train/NonFight/BUjGBAPb_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.3199896216392517
+   },
+   {
+    "clip": "train/NonFight/CKzrrb7E_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.5814777612686157
+   },
+   {
+    "clip": "train/NonFight/CKzrrb7E_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.696675181388855
+   },
+   {
+    "clip": "train/NonFight/CKzrrb7E_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.4500613510608673
+   },
+   {
+    "clip": "train/NonFight/DIsQwAdR8MI_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.3467414975166321
+   },
+   {
+    "clip": "train/NonFight/DThokDTW_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.3280767500400543
+   },
+   {
+    "clip": "train/NonFight/DTq6Gu30-uA_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.3851642608642578
+   },
+   {
+    "clip": "train/NonFight/DTq6Gu30-uA_2.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.5266090631484985
+   },
+   {
+    "clip": "train/NonFight/DTq6Gu30-uA_2.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.518134593963623
+   },
+   {
+    "clip": "train/NonFight/DTq6Gu30-uA_2.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.44149649143218994
+   },
+   {
+    "clip": "train/NonFight/DX5wwFlF_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.46350744366645813
+   },
+   {
+    "clip": "train/NonFight/DjLWv5mr_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.34106922149658203
+   },
+   {
+    "clip": "train/NonFight/EizIwdII_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.3294210135936737
+   },
+   {
+    "clip": "train/NonFight/EizIwdII_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.3927267789840698
+   },
+   {
+    "clip": "train/NonFight/F7W6PQ3V3y8_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.46824419498443604
+   },
+   {
+    "clip": "train/NonFight/FB3eqRE8_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.3265041708946228
+   },
+   {
+    "clip": "train/NonFight/H1AzC-GyKto_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.46015289425849915
+   },
+   {
+    "clip": "train/NonFight/HAh9eqtO_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.3520393669605255
+   },
+   {
+    "clip": "train/NonFight/HAh9eqtO_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.38937002420425415
+   },
+   {
+    "clip": "train/NonFight/HAh9eqtO_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.5215755105018616
+   },
+   {
+    "clip": "train/NonFight/HAoCHqFV_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.3007766604423523
+   },
+   {
+    "clip": "train/NonFight/HAoCHqFV_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.31204554438591003
+   },
+   {
+    "clip": "train/NonFight/HW48LUZKOL4_2.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.41478797793388367
+   },
+   {
+    "clip": "train/NonFight/HW48LUZKOL4_3.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.3207619786262512
+   },
+   {
+    "clip": "train/NonFight/HW48LUZKOL4_3.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.44578373432159424
+   },
+   {
+    "clip": "train/NonFight/HbfZYAXw_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.32974550127983093
+   },
+   {
+    "clip": "train/NonFight/HbfZYAXw_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.3736543357372284
+   },
+   {
+    "clip": "train/NonFight/I-x0G5pAan0_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.35686787962913513
+   },
+   {
+    "clip": "train/NonFight/Isob76kh_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.4180380702018738
+   },
+   {
+    "clip": "train/NonFight/Isob76kh_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.5685247182846069
+   },
+   {
+    "clip": "train/NonFight/JPIeYvRgo6I_1.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.3766556978225708
+   },
+   {
+    "clip": "train/NonFight/JPMLt2ZH_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.46325936913490295
+   },
+   {
+    "clip": "train/NonFight/MhVfgPWz_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.7620742321014404
+   },
+   {
+    "clip": "train/NonFight/MhVfgPWz_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.6818057298660278
+   },
+   {
+    "clip": "train/NonFight/MhVfgPWz_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.6435122489929199
+   },
+   {
+    "clip": "train/NonFight/MhVfgPWz_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.6315066814422607
+   },
+   {
+    "clip": "train/NonFight/MhVfgPWz_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.6411488056182861
+   },
+   {
+    "clip": "train/NonFight/OAFsSiyX_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.3122527301311493
+   },
+   {
+    "clip": "train/NonFight/OFwYyouR_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.37253668904304504
+   },
+   {
+    "clip": "train/NonFight/OdxnpEnn_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.5565497875213623
+   },
+   {
+    "clip": "train/NonFight/OdxnpEnn_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.41149643063545227
+   },
+   {
+    "clip": "train/NonFight/OdxnpEnn_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.39784660935401917
+   },
+   {
+    "clip": "train/NonFight/PNoO9WGJ_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.6279988288879395
+   },
+   {
+    "clip": "train/NonFight/Pe1uIhp4dAQ_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.43585285544395447
+   },
+   {
+    "clip": "train/NonFight/Pe1uIhp4dAQ_1.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.37047120928764343
+   },
+   {
+    "clip": "train/NonFight/PxhG17WC_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.32568252086639404
+   },
+   {
+    "clip": "train/NonFight/R1A_AxUKosk_1.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.3899422585964203
+   },
+   {
+    "clip": "train/NonFight/R2x2rOWh_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.39130839705467224
+   },
+   {
+    "clip": "train/NonFight/RGIpCpdlzI8_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.41225117444992065
+   },
+   {
+    "clip": "train/NonFight/RVV3lolZ_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.4842773973941803
+   },
+   {
+    "clip": "train/NonFight/RVV3lolZ_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.5585013628005981
+   },
+   {
+    "clip": "train/NonFight/Ri_poPbOu-k_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.4433336853981018
+   },
+   {
+    "clip": "train/NonFight/TSHiCcMS_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.6890243887901306
+   },
+   {
+    "clip": "train/NonFight/TSHiCcMS_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.6664065718650818
+   },
+   {
+    "clip": "train/NonFight/TSHiCcMS_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.48754069209098816
+   },
+   {
+    "clip": "train/NonFight/TSHiCcMS_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.6596329212188721
+   },
+   {
+    "clip": "train/NonFight/TSHiCcMS_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.4936023950576782
+   },
+   {
+    "clip": "train/NonFight/TfDHgxDm_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.31280678510665894
+   },
+   {
+    "clip": "train/NonFight/V726w0IKCp4_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.3003561198711395
+   },
+   {
+    "clip": "train/NonFight/V89iCOJ1_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.300143837928772
+   },
+   {
+    "clip": "train/NonFight/VbwTMJroTbI_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.38718560338020325
+   },
+   {
+    "clip": "train/NonFight/WHNtrI7MEUg_1.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.3383542001247406
+   },
+   {
+    "clip": "train/NonFight/Xhh2ONc7_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.4507932960987091
+   },
+   {
+    "clip": "train/NonFight/XwiwESMn_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.39130839705467224
+   },
+   {
+    "clip": "train/NonFight/Y-TiUAODEYw_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.6325359344482422
+   },
+   {
+    "clip": "train/NonFight/_q5Nwh4Z6ao_3.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.4445594549179077
+   },
+   {
+    "clip": "train/NonFight/a7gBQaAFEtw_3.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.5736969709396362
+   },
+   {
+    "clip": "train/NonFight/aGfwZ3E4_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.3010416626930237
+   },
+   {
+    "clip": "train/NonFight/bK1saynI_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.4233193099498749
+   },
+   {
+    "clip": "train/NonFight/bK1saynI_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.4929671287536621
+   },
+   {
+    "clip": "train/NonFight/bpbiA2sr_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.36824023723602295
+   },
+   {
+    "clip": "train/NonFight/bpbiA2sr_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.5816184878349304
+   },
+   {
+    "clip": "train/NonFight/c1bRFt0x_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.44423526525497437
+   },
+   {
+    "clip": "train/NonFight/c1bRFt0x_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.35843902826309204
+   },
+   {
+    "clip": "train/NonFight/c1bRFt0x_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.43951117992401123
+   },
+   {
+    "clip": "train/NonFight/c1bRFt0x_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.6819459199905396
+   },
+   {
+    "clip": "train/NonFight/cPeNUm31_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.3435039818286896
+   },
+   {
+    "clip": "train/NonFight/cWJ92fkhME4_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.8183220624923706
+   },
+   {
+    "clip": "train/NonFight/cqP8OyUh_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.4334496557712555
+   },
+   {
+    "clip": "train/NonFight/dNDOYLTf_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.32606425881385803
+   },
+   {
+    "clip": "train/NonFight/d_93UNyiVM4_1.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.4448545575141907
+   },
+   {
+    "clip": "train/NonFight/e4U3gEDEB58_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.5173178911209106
+   },
+   {
+    "clip": "train/NonFight/e7tarNsO_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.46023425459861755
+   },
+   {
+    "clip": "train/NonFight/eF5S8iGLAm4_1.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.5181289911270142
+   },
+   {
+    "clip": "train/NonFight/eUtGwBik_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.4185011386871338
+   },
+   {
+    "clip": "train/NonFight/ev8va5uR_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.3334464132785797
+   },
+   {
+    "clip": "train/NonFight/f50PQz7mXds_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.4049112796783447
+   },
+   {
+    "clip": "train/NonFight/f50PQz7mXds_1.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.3134777247905731
+   },
+   {
+    "clip": "train/NonFight/f9jcrHqO_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.39023059606552124
+   },
+   {
+    "clip": "train/NonFight/fvtpgsrF_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.3272497057914734
+   },
+   {
+    "clip": "train/NonFight/fvtpgsrF_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.3551199436187744
+   },
+   {
+    "clip": "train/NonFight/g3QdfSDk_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.3749053180217743
+   },
+   {
+    "clip": "train/NonFight/gBBRxXBI_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.314199298620224
+   },
+   {
+    "clip": "train/NonFight/gBBRxXBI_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.31335747241973877
+   },
+   {
+    "clip": "train/NonFight/gBBRxXBI_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.47371232509613037
+   },
+   {
+    "clip": "train/NonFight/gBBRxXBI_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.48313483595848083
+   },
+   {
+    "clip": "train/NonFight/gSmdNZya_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.45816007256507874
+   },
+   {
+    "clip": "train/NonFight/gSmdNZya_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.5419921278953552
+   },
+   {
+    "clip": "train/NonFight/gzrwD4E5_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.4257335960865021
+   },
+   {
+    "clip": "train/NonFight/hrBh5x_3hW0_1.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.30926790833473206
+   },
+   {
+    "clip": "train/NonFight/iqAmk7ES_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.3252457082271576
+   },
+   {
+    "clip": "train/NonFight/jTbvVbkUaPM_1.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.37379947304725647
+   },
+   {
+    "clip": "train/NonFight/kMI2JME3Aag_1.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.4217537045478821
+   },
+   {
+    "clip": "train/NonFight/kMI2JME3Aag_3.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.39299628138542175
+   },
+   {
+    "clip": "train/NonFight/ljLg4lFbS0Y_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.5334959626197815
+   },
+   {
+    "clip": "train/NonFight/ljLg4lFbS0Y_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.3126429319381714
+   },
+   {
+    "clip": "train/NonFight/ljLg4lFbS0Y_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.5899959802627563
+   },
+   {
+    "clip": "train/NonFight/ljLg4lFbS0Y_1.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.7121814489364624
+   },
+   {
+    "clip": "train/NonFight/ljLg4lFbS0Y_1.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.6863460540771484
+   },
+   {
+    "clip": "train/NonFight/mRqg-WXiR7Q_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.4456290602684021
+   },
+   {
+    "clip": "train/NonFight/mRqg-WXiR7Q_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.5867369174957275
+   },
+   {
+    "clip": "train/NonFight/mx0UXBFc_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.3470851182937622
+   },
+   {
+    "clip": "train/NonFight/niXRLeON_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.5874588489532471
+   },
+   {
+    "clip": "train/NonFight/niXRLeON_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.6906488537788391
+   },
+   {
+    "clip": "train/NonFight/niXRLeON_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.38077986240386963
+   },
+   {
+    "clip": "train/NonFight/oAeudqZD_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.35097673535346985
+   },
+   {
+    "clip": "train/NonFight/oAeudqZD_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.5180623531341553
+   },
+   {
+    "clip": "train/NonFight/oDGm-DOOyI4_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.34418895840644836
+   },
+   {
+    "clip": "train/NonFight/ootage (_TwPzPRK7dc)_1.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.5899632573127747
+   },
+   {
+    "clip": "train/NonFight/ootage (_TwPzPRK7dc)_1.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.49483805894851685
+   },
+   {
+    "clip": "train/NonFight/pLb6Zimq_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.541318416595459
+   },
+   {
+    "clip": "train/NonFight/qIRZ4SMf_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.3968166410923004
+   },
+   {
+    "clip": "train/NonFight/qIRZ4SMf_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.34921765327453613
+   },
+   {
+    "clip": "train/NonFight/qmvilMkD57M_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.37411418557167053
+   },
+   {
+    "clip": "train/NonFight/qrBAhb8K_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.4100148379802704
+   },
+   {
+    "clip": "train/NonFight/r8PX3ZJ1_II_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.3286743760108948
+   },
+   {
+    "clip": "train/NonFight/rSumd9HEmrA_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.3928694427013397
+   },
+   {
+    "clip": "train/NonFight/rSumd9HEmrA_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.5166372656822205
+   },
+   {
+    "clip": "train/NonFight/rSumd9HEmrA_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.383679062128067
+   },
+   {
+    "clip": "train/NonFight/rSumd9HEmrA_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.49695733189582825
+   },
+   {
+    "clip": "train/NonFight/s-jW4cyavW0_1.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.35344770550727844
+   },
+   {
+    "clip": "train/NonFight/s-jW4cyavW0_1.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.3041761815547943
+   },
+   {
+    "clip": "train/NonFight/sIbVwIO0_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.4344203472137451
+   },
+   {
+    "clip": "train/NonFight/tIvvuvuJFYc_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.5456860065460205
+   },
+   {
+    "clip": "train/NonFight/tPpXT9VI_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.467978835105896
+   },
+   {
+    "clip": "train/NonFight/tPpXT9VI_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.6920918226242065
+   },
+   {
+    "clip": "train/NonFight/tPpXT9VI_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.4495510458946228
+   },
+   {
+    "clip": "train/NonFight/tPpXT9VI_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.6726481914520264
+   },
+   {
+    "clip": "train/NonFight/tPpXT9VI_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.7100867629051208
+   },
+   {
+    "clip": "train/NonFight/tXk2yvmq_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.3387441337108612
+   },
+   {
+    "clip": "train/NonFight/tzdvtHL7Akk_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.4191567003726959
+   },
+   {
+    "clip": "train/NonFight/tzdvtHL7Akk_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.3110958933830261
+   },
+   {
+    "clip": "train/NonFight/tzdvtHL7Akk_1.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.5202062129974365
+   },
+   {
+    "clip": "train/NonFight/tzdvtHL7Akk_1.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.349407434463501
+   },
+   {
+    "clip": "train/NonFight/uyeWsodv_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.45441582798957825
+   },
+   {
+    "clip": "train/NonFight/uyeWsodv_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.40762537717819214
+   },
+   {
+    "clip": "train/NonFight/uyeWsodv_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.3663547933101654
+   },
+   {
+    "clip": "train/NonFight/vCO6CZNt_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.33447298407554626
+   },
+   {
+    "clip": "train/NonFight/vCO6CZNt_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.3085935115814209
+   },
+   {
+    "clip": "train/NonFight/vQKHxtrdEHM_1.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.7052350044250488
+   },
+   {
+    "clip": "train/NonFight/vQKHxtrdEHM_1.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.36069074273109436
+   },
+   {
+    "clip": "train/NonFight/wNTaSOXj_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.31492310762405396
+   },
+   {
+    "clip": "train/NonFight/wNTaSOXj_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.31015264987945557
+   },
+   {
+    "clip": "train/NonFight/wgdTpJTo_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.34552040696144104
+   },
+   {
+    "clip": "train/NonFight/wgdTpJTo_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.30499953031539917
+   },
+   {
+    "clip": "train/NonFight/wgdTpJTo_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.3352564573287964
+   },
+   {
+    "clip": "train/NonFight/wk5WCCti_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.39420440793037415
+   },
+   {
+    "clip": "train/NonFight/xQSbcaZp_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.36446890234947205
+   },
+   {
+    "clip": "train/NonFight/ytjGIK9m_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.31808990240097046
+   },
+   {
+    "clip": "train/NonFight/ytjGIK9m_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.3086192309856415
+   },
+   {
+    "clip": "train/NonFight/ytjGIK9m_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.34666353464126587
+   },
+   {
+    "clip": "train/NonFight/ytjGIK9m_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.35865986347198486
+   },
+   {
+    "clip": "train/NonFight/ytjGIK9m_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.3637203872203827
+   },
+   {
+    "clip": "train/NonFight/zZHTBiER_0.avi",
+    "t_start": 0.0,
+    "t_end": 1.0,
+    "weapon_max_conf": 0.42447924613952637
+   },
+   {
+    "clip": "train/NonFight/zZHTBiER_0.avi",
+    "t_start": 1.0,
+    "t_end": 2.0,
+    "weapon_max_conf": 0.31585076451301575
+   },
+   {
+    "clip": "train/NonFight/zZHTBiER_0.avi",
+    "t_start": 2.0,
+    "t_end": 3.0,
+    "weapon_max_conf": 0.34796634316444397
+   },
+   {
+    "clip": "train/NonFight/zZHTBiER_0.avi",
+    "t_start": 3.0,
+    "t_end": 4.0,
+    "weapon_max_conf": 0.3932786285877228
+   },
+   {
+    "clip": "train/NonFight/zZHTBiER_0.avi",
+    "t_start": 4.0,
+    "t_end": 4.9,
+    "weapon_max_conf": 0.4140516221523285
+   }
+  ]
+ },
+ "weaponshield_weights": "https://raw.githubusercontent.com/Halok600/WeaponShield-AI/7a0b08ed8961a70fe8ceeeedb1b341584eff66f8/model/best.pt",
+ "sources": {
+  "sevilla_and_unity": "huggingface.co/datasets/jsalazar/US-Real-time-gun-detection-in-CCTV-An-open-problem-dataset",
+  "rwf2000_mirror": "huggingface.co/datasets/DanJoshua/RWF-2000"
+ }
+}
