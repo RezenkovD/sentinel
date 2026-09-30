@@ -61,7 +61,8 @@ context:
   zones: configs/zones.yaml
 
 aggregator_a:               # A: a trained model if `model` is set, else the hand-set weights v0.1 below
-  model: weights/aggregator_a/a_v1.json  # A v1 (30.09): LR on RWF train, without facing_close and weapon features
+  model: weights/aggregator_a/a_v1_1_all.json  # A v1.1 (30.09): LR on all RWF train windows but empty ones
+                            # that do not move; no facing_close / weapon features (decisions 30.09, report 03)
   # risk = sigmoid(bias + Σ weights[f] · clip((x_f − mean_f) / scale[f], ±clip)); mean = 0 for hand-set weights.
   # A null feature takes its `neutral` value; explanations rank contributions against the neutral scene.
   bias: -1.5                # v0.1 (29.09): tuned on the sanity samples, see docs/DECISIONS.md
