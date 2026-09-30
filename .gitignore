@@ -1,7 +1,7 @@
 # Data and artifacts live outside git (see CLAUDE.md)
 data/raw/
 data/episodes/
-data/episodes_crops/
+data/episodes_crops*/
 weights/
 results/
 cache/
