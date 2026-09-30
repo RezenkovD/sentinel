@@ -54,6 +54,26 @@ def test_xd_subset_is_balanced_by_duration_and_skips_out_of_scope_videos():
     assert subset == select_xd_subset(videos, budget_hours=1.5, seed=2026)  # fixed seed
 
 
+def test_a_short_shooting_share_is_filled_with_other_videos_that_have_shooting():
+    """Decision 30.09 (report 03, item 9): labels within {B1, B2} may be mixed. When the B2-first videos run
+    out before the B2 share, videos with B2 among other labels fill it; nothing chosen before is dropped."""
+    videos = []
+    for i in range(40):
+        videos.append({"name": f"f{i}_label_B1-0-0", "duration_s": 60.0})
+        videos.append({"name": f"n{i}_label_A", "duration_s": 120.0})
+    videos += [{"name": f"s{i}_label_B2-0-0", "duration_s": 90.0} for i in range(5)]  # 450 s < 1800 s share
+    videos += [{"name": f"m{i}_label_B1-B2-0", "duration_s": 60.0} for i in range(6)]
+    videos += [{"name": "g0_label_B2-G-0", "duration_s": 60.0}]  # explosions: still out of scope
+    before = select_xd_subset(videos, budget_hours=1.5, seed=2026, all_shooting=False)
+    subset = select_xd_subset(videos, budget_hours=1.5, seed=2026)
+    names = [v["name"] for v in subset["videos"]]
+    assert [v["name"] for v in before["videos"]] == names[: len(before["videos"])]
+    added = names[len(before["videos"]) :]
+    assert added and all(n.startswith("m") for n in added)  # only mixed B1-B2 ones, never B2-G
+    assert all(v["stratum"] == "B2" for v in subset["videos"][len(before["videos"]) :])
+    assert len(added) + sum(n.startswith("m") for n in names[: len(before["videos"])]) == 6
+
+
 def test_sevilla_frames_are_timed_at_two_per_second_and_labelled_from_xml(tmp_path: Path):
     for n, has_gun in ((100, False), (101, True), (103, True)):
         stem = f"Cam1-X_Segment_0_x264_frame_{n}"

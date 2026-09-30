@@ -67,11 +67,14 @@ def xd_labels(name: str) -> list[str]:
     return [label for label in name.rsplit("_label_", 1)[1].split("-") if label != "0"]
 
 
-def select_xd_subset(videos: list[dict], budget_hours: float, seed: int) -> dict:
+def select_xd_subset(videos: list[dict], budget_hours: float, seed: int, all_shooting: bool = True) -> dict:
     """Test subset of about `budget_hours`: equal time for Fighting (B1), Shooting (B2) and normal (A) videos.
 
-    Videos whose labels leave the scenario (riots, abuse, accidents, explosions — alone or mixed in) are left
-    out.
+    Labels may be mixed within {B1, B2}; videos whose labels leave the scenario (riots, abuse, accidents,
+    explosions — alone or mixed in) are left out. A video joins the stratum of its first label. Shooting is
+    scarce in the XD test: with `all_shooting`, when the B2-first videos run out before the B2 share, other
+    in-scope videos with B2 among their labels fill it, in seeded order (decision 30.09, report 03, item 9).
+    The equal-time choice before that does not change.
     """
     strata: dict[str, list[dict]] = {"B1": [], "B2": [], "A": []}
     out_of_scope = 0
@@ -95,10 +98,26 @@ def select_xd_subset(videos: list[dict], budget_hours: float, seed: int) -> dict
                 break
             chosen.append({**video, "stratum": stratum, "labels": xd_labels(video["name"])})
             total += video["duration_s"]
+    shooting = [v for v in chosen if v["stratum"] == "B2"]
+    if all_shooting and len(shooting) == len(strata["B2"]):  # every B2-first video is taken
+        taken = {v["name"] for v in chosen}
+        extra = [v for v in strata["B1"] if v["name"] not in taken and "B2" in xd_labels(v["name"])]
+        rng.shuffle(extra)
+        total = sum(v["duration_s"] for v in shooting)
+        for video in extra:
+            if total >= share:
+                break
+            chosen.append({**video, "stratum": "B2", "labels": xd_labels(video["name"])})
+            total += video["duration_s"]
     return {
         "budget_hours": budget_hours,
         "seed": seed,
-        "rule": "equal time for B1 / B2 / A; labels outside {B1, B2} excluded (scenario limit)",
+        "rule": "equal time for B1 / B2 / A; labels outside {B1, B2} excluded (scenario limit)"
+        + (
+            "; a short B2 share is filled with other in-scope videos with B2 among their labels"
+            if all_shooting
+            else ""
+        ),
         "videos": chosen,
         "excluded": {"out_of_scope": out_of_scope},
     }

@@ -1,7 +1,7 @@
 {
  "budget_hours": 4.0,
  "seed": 2026,
- "rule": "equal time for B1 / B2 / A; labels outside {B1, B2} excluded (scenario limit)",
+ "rule": "equal time for B1 / B2 / A; labels outside {B1, B2} excluded (scenario limit); a short B2 share is filled with other in-scope videos with B2 among their labels",
  "videos": [
   {
    "name": "Ip.Man.2008__#00-48-57_00-50-47_label_B1-0-0",
@@ -1185,6 +1185,87 @@
    "stratum": "A",
    "labels": [
     "A"
+   ]
+  },
+  {
+   "name": "Skyfall.2012__#01-20-05_01-20-20_label_B1-B2-0",
+   "duration_s": 15.04,
+   "stratum": "B2",
+   "labels": [
+    "B1",
+    "B2"
+   ]
+  },
+  {
+   "name": "Fury.2014__#00-39-36_00-40-44_label_B1-B2-0",
+   "duration_s": 68.08,
+   "stratum": "B2",
+   "labels": [
+    "B1",
+    "B2"
+   ]
+  },
+  {
+   "name": "Spectre.2015__#00-44-05_00-44-40_label_B1-B2-0",
+   "duration_s": 35.04,
+   "stratum": "B2",
+   "labels": [
+    "B1",
+    "B2"
+   ]
+  },
+  {
+   "name": "Spectre.2015__#01-08-58_01-09-20_label_B1-B2-0",
+   "duration_s": 22.04,
+   "stratum": "B2",
+   "labels": [
+    "B1",
+    "B2"
+   ]
+  },
+  {
+   "name": "Fast.Five.2011__#00-32-05_00-32-24_label_B1-B2-0",
+   "duration_s": 19.04,
+   "stratum": "B2",
+   "labels": [
+    "B1",
+    "B2"
+   ]
+  },
+  {
+   "name": "Desperado.1995__#00-38-36_00-39-21_label_B1-B2-0",
+   "duration_s": 45.04,
+   "stratum": "B2",
+   "labels": [
+    "B1",
+    "B2"
+   ]
+  },
+  {
+   "name": "Spectre.2015__#02-02-57_02-03-27_label_B1-B2-0",
+   "duration_s": 30.08,
+   "stratum": "B2",
+   "labels": [
+    "B1",
+    "B2"
+   ]
+  },
+  {
+   "name": "Spectre.2015__#01-32-55_01-35-40_label_B1-B2-0",
+   "duration_s": 165.08,
+   "stratum": "B2",
+   "labels": [
+    "B1",
+    "B2"
+   ]
+  },
+  {
+   "name": "Yellow.Sea.2010__#01-05-40_01-06-47_label_B1-B2-0",
+   "duration_s": 67.04,
+   "stratum": "B2",
+   "labels": [
+    "B1",
+    "B2"
    ]
   }
  ],
