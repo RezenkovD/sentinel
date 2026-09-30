@@ -88,7 +88,7 @@ def test_feature_auc_ranks_windows_by_one_feature_with_the_clip_label(tmp_path: 
     table = {row["feature"]: row for row in feature_aucs(episodes, CONFIG)}
     assert table["max_speed"]["auc"] == pytest.approx(1.0)
     assert table["max_speed"]["windows"] == 20
-    assert table["weapon_held"]["auc"] == pytest.approx(0.5)  # constant: no information
+    assert table["no_persons"]["auc"] == pytest.approx(0.5)  # constant: no information
 
 
 def test_windows_without_people_are_left_out_of_a_features_but_kept_for_pixel_motion(tmp_path: Path):

@@ -1,8 +1,14 @@
 """Aggregator A: logistic model over scene features plus the "weapon in hand" override rule (SPEC §3–4).
 
 `scene_to_features` is the only way from a scene description to A's inputs: a fixed order of named features.
-A null feature takes its neutral value from the config (a calm scene); for the wrist acceleration an extra
-indicator says the value was missing, because "no data about the hands" is not the same as "calm hands".
+A null feature takes its neutral value from the config (a calm scene); indicators say that the wrist
+acceleration was missing ("no data about the hands" is not "calm hands") and that nobody was detected.
+
+Weapons are not features of A (decision 30.09, report 03): they act through the "weapon in hand" override here
+and the confirmation in the incident automaton. An empty frame where nothing moves (motion_area below
+`quiet_motion_area`, τ_quiet) is zero without computation (SPEC §5); an empty frame with motion is scored from
+the pixel-motion features by a model fitted on all windows (`empty_windows: score`), while a model fitted on
+windows with people only keeps every empty frame at zero (`empty_windows: zero`).
 
 v0 uses hand-set weights from the config. The same object is ready for a fitted logistic regression
 (`fit` / `save` / `load`): features are standardised as z = clip((x − mean) / scale, ±clip) and
@@ -30,13 +36,11 @@ FEATURE_NAMES = (
     "motion_area",
     "min_distance_h",
     "max_approach_speed",
-    "facing_close",
     "max_contact_s",
     "n_close_pairs",
-    "weapon_visible",
-    "weapon_held",
     "zone_prior",
     "limb_accel_missing",
+    "no_persons",
 )
 FEATURE_NAMES_UK = {  # for tables in reports and the thesis
     "n_persons": "кількість людей",
@@ -51,13 +55,11 @@ FEATURE_NAMES_UK = {  # for tables in reports and the thesis
     "motion_area": "частка кадру з рухом",
     "min_distance_h": "найменша відстань між людьми",
     "max_approach_speed": "швидкість зближення",
-    "facing_close": "обличчям одне до одного впритул",
     "max_contact_s": "тривалість близького контакту",
     "n_close_pairs": "кількість пар упритул",
-    "weapon_visible": "зброя в кадрі",
-    "weapon_held": "зброя в руці",
     "zone_prior": "апріорний ризик зони",
     "limb_accel_missing": "немає даних про руки",
+    "no_persons": "людей у кадрі не знайдено",
 }
 _WEAPON_UK = {"gun": "вогнепальна зброя", "knife": "ніж"}
 _REASON_GROUP = {  # one phrase per group in an explanation
@@ -77,6 +79,16 @@ def _num(value: float) -> str:
     return f"{value:.1f}".replace(".", ",")
 
 
+def quiet_empty(scene: SceneDescription, quiet_motion_area: float) -> bool:
+    """Nobody detected and nothing moves: the one case A answers with zero without computing (SPEC §5)."""
+    area = scene.summary.motion_area
+    return scene.summary.n_persons == 0 and (area is None or area < quiet_motion_area)
+
+
+def weapon_held(scene: SceneDescription) -> bool:
+    return any(p.holds is not None for p in scene.persons)
+
+
 def scene_to_features(scene: SceneDescription, config: Config) -> np.ndarray:
     neutral = config.aggregator_a.neutral
     contact = config.features.contact_distance_h
@@ -89,7 +101,7 @@ def scene_to_features(scene: SceneDescription, config: Config) -> np.ndarray:
     def value(v: float | None, name: str) -> float:
         return neutral[name] if v is None else float(v)
 
-    close = [i for i in pairs if i.distance_h < contact]
+    close = [i for i in pairs if i.distance_h < contact]  # pairs in contact
     paired = {i for pair in pairs for i in pair.pair}  # people with someone closer than the pair limit
     prior = config.aggregator_a.zone_prior
     zone = scene.zone
@@ -107,15 +119,13 @@ def scene_to_features(scene: SceneDescription, config: Config) -> np.ndarray:
         "motion_area": value(summary.motion_area, "motion_area"),
         "min_distance_h": worst([i.distance_h for i in pairs], "min_distance_h", pick=min),
         "max_approach_speed": worst([i.approach_speed for i in pairs], "max_approach_speed"),
-        "facing_close": float(any(i.facing is True for i in close)),
         "max_contact_s": worst([i.duration_s for i in pairs], "max_contact_s"),
         "n_close_pairs": float(len(close)),
-        "weapon_visible": float(summary.weapon_visible),
-        "weapon_held": float(any(p.holds is not None for p in persons)),
         "zone_prior": prior.hours.get(zone.hours, 0.0)
         + prior.density.get(zone.expected_density, 0.0)
         + prior.type.get(zone.type, 0.0),
         "limb_accel_missing": float(bool(persons) and all(p.limb_accel is None for p in persons)),
+        "no_persons": float(summary.n_persons == 0),
     }
     return np.array([x[name] for name in FEATURE_NAMES], dtype=float)
 
@@ -139,17 +149,10 @@ def _reason(name: str, x: dict[str, float], scene: SceneDescription) -> str | No
         return f"двоє людей зблизилися до {_num(x[name])} зросту"
     if name == "max_approach_speed":
         return f"швидке зближення ({_num(x[name])} зросту/с)"
-    if name == "facing_close":
-        return "люди впритул обличчям одне до одного"
     if name == "max_contact_s":
         return f"тривалий близький контакт ({_num(x[name])} с)"
     if name == "n_close_pairs":
         return f"кілька пар упритул ({int(x[name])})"
-    if name == "weapon_held":
-        kinds = sorted({p.holds for p in scene.persons if p.holds})
-        return "зброя в руці: " + ", ".join(_WEAPON_UK[k] for k in kinds)
-    if name == "weapon_visible":
-        return "у кадрі видно зброю"
     if name in ("crowd_motion", "max_speed"):
         return f"швидкий рух ({_num(x[name])} зросту/с)"
     if name == "n_persons":
@@ -157,6 +160,11 @@ def _reason(name: str, x: dict[str, float], scene: SceneDescription) -> str | No
     if name == "zone_prior":
         return "зона або час підвищеного ризику"
     return None
+
+
+def _weapon_phrase(scene: SceneDescription) -> str:
+    kinds = sorted({p.holds for p in scene.persons if p.holds})
+    return "зброя в руці: " + ", ".join(_WEAPON_UK[k] for k in kinds)
 
 
 def make_aggregator(config: Config) -> "RulesAggregator":
@@ -193,9 +201,14 @@ class RulesAggregator:
         scale: np.ndarray,
         clip: float,
         config: Config,
+        empty_windows: str = "zero",  # "score": fitted on all windows, empty frames with motion are scored
     ) -> None:
+        if empty_windows not in ("zero", "score"):
+            raise ValueError(f"empty_windows must be 'zero' or 'score', got {empty_windows!r}")
         self.weights, self.bias, self.mean, self.scale, self.clip = weights, bias, mean, scale, clip
         self.config = config
+        self.empty_windows = empty_windows
+        self.weapon_override = True  # evaluation switch: the one-window "weapon in hand" floor on the risk
         self._neutral_z = self._standardise(np.array([config.aggregator_a.neutral[n] for n in FEATURE_NAMES]))
 
     @classmethod
@@ -215,13 +228,15 @@ class RulesAggregator:
 
     def assess(self, scene: SceneDescription) -> RiskResult:
         thresholds = self.config.incidents
-        if scene.summary.n_persons == 0:
+        if scene.summary.n_persons == 0 and (
+            self.empty_windows == "zero" or quiet_empty(scene, self.config.aggregator_a.quiet_motion_area)
+        ):
             return RiskResult(risk=0.0, level="normal", reason_uk="У кадрі нікого немає")
         x = scene_to_features(scene, self.config)
         z = self._standardise(x)
         risk = float(1.0 / (1.0 + np.exp(-(self.bias + self.weights @ z))))
         named = dict(zip(FEATURE_NAMES, x, strict=True))
-        if named["weapon_held"]:
+        if self.weapon_override and weapon_held(scene):
             risk = max(risk, min(1.0, thresholds.theta_high + thresholds.weapon_override_margin))
         level = (
             "alarm"
@@ -238,9 +253,8 @@ class RulesAggregator:
         floor = self.config.aggregator_a.reason_min_contribution
         phrases: list[str] = []
         groups: set[str] = set()
-        if x["weapon_held"]:  # the override decided the alarm: say so first, whatever the regression weights
-            phrases.append(_reason("weapon_held", x, scene))
-            groups.add("weapon_held")
+        if self.weapon_override and weapon_held(scene):  # the override decided the alarm: say so first
+            phrases.append(_weapon_phrase(scene))
         for i in np.argsort(-contributions):
             name = FEATURE_NAMES[i]
             if contributions[i] < floor or len(phrases) == 3:
@@ -264,12 +278,14 @@ class RulesAggregator:
             "mean": self.mean.tolist(),
             "scale": self.scale.tolist(),
             "clip": self.clip,
+            "empty_windows": self.empty_windows,
             "schema_version": SCHEMA_VERSION,
             # what turns a scene into the inputs: pinned, so later config edits cannot shift a trained model
             "input_settings": {
                 "neutral": dict(self.config.aggregator_a.neutral),
                 "zone_prior": self.config.aggregator_a.zone_prior.model_dump(),
                 "contact_distance_h": self.config.features.contact_distance_h,
+                "quiet_motion_area": self.config.aggregator_a.quiet_motion_area,
             },
         } | (extra or {})
         Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -302,6 +318,7 @@ class RulesAggregator:
                         update={
                             "neutral": pinned["neutral"],
                             "zone_prior": a.zone_prior.model_validate(pinned["zone_prior"]),
+                            "quiet_motion_area": pinned.get("quiet_motion_area", a.quiet_motion_area),
                         }
                     ),
                     "features": config.features.model_copy(
@@ -310,5 +327,11 @@ class RulesAggregator:
                 }
             )
         return cls(
-            arrays["weights"], float(data["bias"]), arrays["mean"], arrays["scale"], data["clip"], config
+            arrays["weights"],
+            float(data["bias"]),
+            arrays["mean"],
+            arrays["scale"],
+            data["clip"],
+            config,
+            data.get("empty_windows", "zero"),
         )

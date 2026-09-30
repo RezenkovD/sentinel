@@ -69,6 +69,33 @@ def test_windows_without_people_are_not_used_for_training():
     assert x.shape == (40, len(FEATURE_NAMES)) and y.tolist().count(1) == 20
 
 
+def _empty(area: float) -> SceneDescription:
+    return SceneDescription(
+        window=Window(t_start=0.0, t_end=1.0, source="cam-1"),
+        zone=ZONE,
+        summary=Summary(
+            n_persons=0, crowd_motion=0.0, motion_energy=1.0, motion_area=area, weapon_visible=False
+        ),
+    )
+
+
+def test_training_on_all_windows_keeps_empty_windows_that_move():
+    """Decision 30.09 (SPEC §5): an empty window is zero only when nothing moves; A may learn the rest."""
+    quiet = CONFIG.aggregator_a.quiet_motion_area
+    episode = CachedEpisode({"label": 1}, [_empty(quiet / 2), _empty(quiet * 20)], [{}, {}])
+    x, y = train_windows([episode], CONFIG, windows="all")
+    assert x.shape == (1, len(FEATURE_NAMES)) and x[0, FEATURE_NAMES.index("no_persons")] == 1.0
+    assert train_windows([episode], CONFIG, windows="people")[0].shape[0] == 0
+
+
+def test_a_fitted_on_all_windows_scores_empty_windows_that_move():
+    train, val = _episodes(40, 1, "train"), _episodes(20, 2, "val")
+    people = fit_a(train, val, CONFIG, c_grid=(1.0,), seed=2026).aggregator
+    every = fit_a(train, val, CONFIG, c_grid=(1.0,), seed=2026, windows="all").aggregator
+    assert (people.empty_windows, every.empty_windows) == ("zero", "score")
+    assert people.assess(_empty(5.0)).risk == 0.0 and every.assess(_empty(5.0)).risk > 0.0
+
+
 def test_fitted_a_separates_the_classes_and_reproduces_sklearn_exactly():
     train, val = _episodes(80, 1, "train"), _episodes(40, 2, "val")
     result = fit_a(train, val, CONFIG, c_grid=(0.01, 1.0), seed=2026)
@@ -125,7 +152,7 @@ def test_saved_model_loads_with_its_metadata_and_refuses_another_perception(tmp_
 
 def test_excluded_features_get_no_weight_and_the_rest_matches_the_reduced_pipeline():
     train, val = _episodes(60, 1, "train"), _episodes(30, 2, "val")
-    excluded = ("weapon_visible", "weapon_held", "facing_close")
+    excluded = ("zone_prior", "n_close_pairs")
     result = fit_a(train, val, CONFIG, c_grid=(1.0,), seed=2026, exclude=excluded)
     a = result.aggregator
     for name in excluded:

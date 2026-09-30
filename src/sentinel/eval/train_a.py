@@ -2,9 +2,10 @@
 
     uv run sentinel eval train-a            # RWF train -> fit, RWF val -> C, episode score, thresholds
 
-- Windows of our RWF train with people; the window label is the clip label (weak labels: a Fight clip also has
-  calm moments, a NonFight clip may have fast motion). A never sees a window without people: it returns zero
-  risk for an empty scene (SPEC §5), so such windows would only teach it noise.
+- Windows of our RWF train; the window label is the clip label (weak labels: a Fight clip also has calm
+  moments, a NonFight clip may have fast motion). `--windows people` (v1): windows with people only, and the
+  model keeps every empty frame at zero. `--windows all` (decision 30.09, SPEC §5): also the empty frames
+  where something moves, with the `no_persons` indicator — only an empty frame that does not move is zero.
 - sklearn Pipeline: standardisation, clipping to ±`aggregator_a.clip`, `LogisticRegression(class_weight=
   "balanced")`; C by the window AUC on our val, fixed seed. The fitted numbers are exported to the same
   RulesAggregator that `sentinel run` uses, so the running A is exactly this model.
@@ -21,23 +22,41 @@ from pathlib import Path
 
 import numpy as np
 
-from sentinel.aggregators.rules import FEATURE_NAMES, FEATURE_NAMES_UK, RulesAggregator, scene_to_features
+from sentinel.aggregators.rules import (
+    FEATURE_NAMES,
+    FEATURE_NAMES_UK,
+    RulesAggregator,
+    quiet_empty,
+    scene_to_features,
+)
 from sentinel.config import DEFAULT_CONFIG, Config, load_config
 from sentinel.eval.cache import OUT_DEFAULT, CachedEpisode, _auc, check_complete, load_episodes
 
 C_GRID = (0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0)
 EPISODE_RULES = ("max", "top2", "mean")
+WINDOWS = {"people": "zero", "all": "score"}  # training windows -> what the model does with empty frames
 
 
-def train_windows(episodes: list[CachedEpisode], config: Config) -> tuple[np.ndarray, np.ndarray]:
-    """Features and labels of every window with people (window label = episode label)."""
+def uses_window(scene, windows: str, config: Config) -> bool:
+    if windows == "people":
+        return scene.summary.n_persons > 0
+    if windows == "all":
+        return not quiet_empty(scene, config.aggregator_a.quiet_motion_area)
+    raise ValueError(f"windows must be one of {sorted(WINDOWS)}, got {windows!r}")
+
+
+def train_windows(
+    episodes: list[CachedEpisode], config: Config, windows: str = "people"
+) -> tuple[np.ndarray, np.ndarray]:
+    """Features and labels (= episode label) of the windows A learns from: with people, or all but the empty
+    frames that do not move."""
     rows, labels = [], []
     for episode in episodes:
         for scene in episode.scenes:
-            if scene.summary.n_persons > 0:
+            if uses_window(scene, windows, config):
                 rows.append(scene_to_features(scene, config))
                 labels.append(episode.label)
-    return np.array(rows), np.array(labels)
+    return np.array(rows).reshape(-1, len(FEATURE_NAMES)), np.array(labels)
 
 
 def make_pipeline(c: float, clip: float, seed: int):
@@ -70,6 +89,7 @@ def fit_a(
     c_grid: tuple[float, ...] = C_GRID,
     seed: int = 2026,
     exclude: tuple[str, ...] = (),
+    windows: str = "people",
 ) -> FitResult:
     """Fit on train for every C; keep the one with the best window AUC on val (ties: the smaller C).
 
@@ -80,8 +100,8 @@ def fit_a(
     if unknown:
         raise ValueError(f"unknown features to exclude: {sorted(unknown)}")
     keep = [i for i, name in enumerate(FEATURE_NAMES) if name not in exclude]
-    x, y = train_windows(train, config)
-    xv, yv = train_windows(val, config)
+    x, y = train_windows(train, config, windows)
+    xv, yv = train_windows(val, config, windows)
     x, xv = x[:, keep], xv[:, keep]
     clip = config.aggregator_a.clip
     best, by_c = None, []
@@ -97,7 +117,13 @@ def fit_a(
     weights, mean, scale = np.zeros(n), np.zeros(n), np.ones(n)  # excluded features: weight 0
     weights[keep], mean[keep], scale[keep] = lr.coef_[0], scaler.mean_, scaler.scale_
     aggregator = RulesAggregator(
-        weights=weights, bias=float(lr.intercept_[0]), mean=mean, scale=scale, clip=clip, config=config
+        weights=weights,
+        bias=float(lr.intercept_[0]),
+        mean=mean,
+        scale=scale,
+        clip=clip,
+        config=config,
+        empty_windows=WINDOWS[windows],
     )
     return FitResult(pipeline, aggregator, c, auc, by_c)
 
@@ -154,6 +180,12 @@ def main(argv: list[str] | None = None) -> None:
         "--exclude", nargs="*", default=[], choices=FEATURE_NAMES, help="features left out of the regression"
     )
     parser.add_argument(
+        "--windows",
+        choices=sorted(WINDOWS),
+        default="people",
+        help="people: windows with people, empty frames stay zero; all: also empty frames that move",
+    )
+    parser.add_argument(
         "--out", type=Path, default=Path(f"results/aggregator_a_{date.today().isoformat()}.md")
     )
     args = parser.parse_args(argv)
@@ -162,13 +194,22 @@ def main(argv: list[str] | None = None) -> None:
     val = load_episodes(args.episodes, "rwf2000", ["val"])
     check_complete(train, "rwf2000", ["train"], allow_partial=args.allow_partial)
     check_complete(val, "rwf2000", ["val"], allow_partial=args.allow_partial)
-    result = fit_a(train, val, config, seed=args.seed, exclude=tuple(args.exclude))
+    result = fit_a(train, val, config, seed=args.seed, exclude=tuple(args.exclude), windows=args.windows)
     a = result.aggregator
 
-    val_risks = [[a.assess(s).risk for s in e.scenes] for e in val]  # empty windows: 0, as A really answers
+    val_risks = [[a.assess(s).risk for s in e.scenes] for e in val]  # empty windows: as A really answers
     labels = np.array([e.label for e in val])
     rule_aucs = {r: _auc(labels, np.array([episode_score(rs, r) for rs in val_risks])) for r in EPISODE_RULES}
     rule = max(EPISODE_RULES, key=lambda r: (rule_aucs[r], -EPISODE_RULES.index(r)))
+    a.weapon_override = False  # decision 30.09, item 4: what the one-window weapon override costs on RWF
+    plain = [[a.assess(s).risk for s in e.scenes] for e in val]
+    a.weapon_override = True
+    pairs = [(r, q) for rs, qs in zip(val_risks, plain, strict=True) for r, q in zip(rs, qs, strict=True)]
+    override_windows = sum(r != q for r, q in pairs)
+    override_episodes = {
+        label: sum(rs != qs and e.label == label for e, rs, qs in zip(val, val_risks, plain, strict=True))
+        for label in (0, 1)
+    }
     scores = np.array([episode_score(rs, rule) for rs in val_risks])
     threshold, f1 = f1_threshold(scores, labels)
     predicted = scores >= threshold
@@ -184,10 +225,16 @@ def main(argv: list[str] | None = None) -> None:
         window_risk[window_label == 0], args.high_quantile, args.low_quantile
     )
     fight_high = float((window_risk[window_label == 1] >= theta_high).mean())
+    with_people = np.array([s.summary.n_persons > 0 for e in val for s in e.scenes])
     metrics = {
-        "window_auc_val_with_people": result.window_auc_val,
+        "window_auc_val_fit_windows": result.window_auc_val,  # the windows of the training rule (choice of C)
+        "window_auc_val_with_people": _auc(window_label[with_people], window_risk[with_people]),
         "window_auc_val_all": _auc(window_label, window_risk),
         "episode_auc_val": rule_aucs[rule],
+        "episode_auc_val_without_weapon_override": _auc(
+            labels, np.array([episode_score(rs, rule) for rs in plain])
+        ),
+        "weapon_override": {"windows": override_windows, "episodes_by_label": override_episodes},
         "episode_rule_aucs": rule_aucs,
         "episode_f1_val": f1,
         "confusion_val": confusion,
@@ -201,6 +248,7 @@ def main(argv: list[str] | None = None) -> None:
         "c": result.c,
         "c_grid": [{"c": c, "window_auc_val": auc} for c, auc in result.by_c],
         "excluded_features": list(args.exclude),
+        "training_windows": args.windows,
         "episode_rule": rule,
         "episode_threshold": threshold,
         "theta_high": theta_high,
@@ -216,9 +264,16 @@ def main(argv: list[str] | None = None) -> None:
     digest = sha256(args.model)
     order = np.argsort(-np.abs(a.weights))
     lines = [
-        f"# Агрегатор A v1 — логістична регресія, {date.today().isoformat()}",
+        f"# Агрегатор A — логістична регресія (`{args.model.name}`), {date.today().isoformat()}",
         "",
-        f"Навчання: наш train RWF ({len(train)} кліпів), вікна з людьми, мітка вікна = мітка кліпу. Вибір C, "
+        f"Навчання: наш train RWF ({len(train)} кліпів), "
+        + (
+            "вікна з людьми (порожні кадри — нуль)"
+            if args.windows == "people"
+            else "усі вікна, крім порожніх без руху (τ_quiet = "
+            f"{_fmt(config.aggregator_a.quiet_motion_area)} % кадру), з індикатором `no_persons`"
+        )
+        + f", мітка вікна = мітка кліпу. Вибір C, "
         f"оцінки епізоду й порогів — наш val ({len(val)} кліпів). Тест не використовувався. Perception "
         f"{meta['perception_version']} / {meta['perception_hash']}. Модель: `{args.model}` (SHA-256 "
         f"`{digest[:16]}…`).",
@@ -229,11 +284,15 @@ def main(argv: list[str] | None = None) -> None:
         + ", ".join(f"{c:g} → {_fmt(auc)}" for c, auc in result.by_c)
         + ")",
         f"- AUC вікон: {_fmt(metrics['window_auc_val_with_people'])} (з людьми), "
-        f"{_fmt(metrics['window_auc_val_all'])} (усі вікна, порожні = 0)",
+        f"{_fmt(metrics['window_auc_val_all'])} (усі вікна, як A справді відповідає)",
         "- AUC епізодів за оцінкою: "
         + ", ".join(f"{r} {_fmt(v)}" for r, v in rule_aucs.items())
         + f" → `{rule}`",
         f"- Поріг епізоду (F1 на val): {_fmt(threshold)}; F1 = {_fmt(f1)}",
+        "- Без одновіконного перекриття «зброя в руці»: AUC епізодів "
+        f"{_fmt(metrics['episode_auc_val_without_weapon_override'])} (перекриття змінило ризик у "
+        f"{override_windows} вікнах; епізодів NonFight / Fight: {override_episodes[0]} / "
+        f"{override_episodes[1]})",
         f"- Матриця помилок (епізоди val): TP {confusion['tp']}, FP {confusion['fp']}, FN {confusion['fn']}, "
         f"TN {confusion['tn']}",
         f"- θ_high = {_fmt(theta_high)} ({args.high_quantile:.0%} спокійних вікон val нижче), θ_low = "

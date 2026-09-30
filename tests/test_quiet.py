@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 
 from sentinel.quiet import LoadWindow, QuietRunner, own_busy_threads, system_busy
@@ -120,6 +121,11 @@ def test_only_live_extraction_processes_are_paused(tmp_path: Path):
         [sys.executable, "-c", "import time; time.sleep(30)", "sentinel", "eval", "extract"]
     )
     other = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    for proc, marker in ((extraction, b"extract"), (other, b"sleep")):  # until fork has become exec
+        for _ in range(500):
+            if marker in Path(f"/proc/{proc.pid}/cmdline").read_bytes():
+                break
+            time.sleep(0.01)
     try:
         register_extraction(tmp_path, extraction.pid)
         register_extraction(tmp_path, other.pid)  # e.g. a PID reused by another program after a reboot

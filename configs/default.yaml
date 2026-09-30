@@ -67,6 +67,8 @@ aggregator_a:               # A: a trained model if `model` is set, else the han
   bias: -1.5                # v0.1 (29.09): tuned on the sanity samples, see docs/DECISIONS.md
   clip: 5.0
   reason_min_contribution: 0.25  # explanations name features that add at least this much to the logit
+  quiet_motion_area: 0.1    # τ_quiet, % of the frame: nobody detected and less motion than this -> risk 0 without
+                            # computing (SPEC §5); 5th percentile of empty windows of RWF train fights (decision 30.09)
   weights:                  # v3 features (schema v3) get 0 until A is trained
     n_persons: 0.1
     crowd_motion: 0.8
@@ -80,13 +82,11 @@ aggregator_a:               # A: a trained model if `model` is set, else the han
     motion_area: 0.0
     min_distance_h: -1.0
     max_approach_speed: 0.6
-    facing_close: 0.5
     max_contact_s: 0.0      # calm groups stand close longer than fighters (window AUC 0.40)
     n_close_pairs: 0.3
-    weapon_visible: 0.8
-    weapon_held: 2.0
     zone_prior: 1.0
     limb_accel_missing: 0.0
+    no_persons: 0.0
   scale:                    # typical magnitude of each feature, in its own units
     n_persons: 5.0
     crowd_motion: 1.0       # heights/s
@@ -100,13 +100,11 @@ aggregator_a:               # A: a trained model if `model` is set, else the han
     motion_area: 10.0       # % of the frame
     min_distance_h: 2.0     # heights
     max_approach_speed: 2.0 # heights/s
-    facing_close: 1.0
     max_contact_s: 5.0      # s
     n_close_pairs: 3.0
-    weapon_visible: 1.0
-    weapon_held: 1.0
     zone_prior: 1.0
     limb_accel_missing: 1.0
+    no_persons: 1.0
   neutral:                  # value of a missing feature = a calm scene
     n_persons: 0.0
     crowd_motion: 0.0
@@ -120,13 +118,11 @@ aggregator_a:               # A: a trained model if `model` is set, else the han
     motion_area: 0.0
     min_distance_h: 2.0     # nobody within the pair limit
     max_approach_speed: 0.0
-    facing_close: 0.0
     max_contact_s: 0.0
     n_close_pairs: 0.0
-    weapon_visible: 0.0
-    weapon_held: 0.0
     zone_prior: 0.0
     limb_accel_missing: 0.0
+    no_persons: 0.0
   zone_prior:               # added up: hours + expected density + zone type
     hours: {day: 0.0, night: 0.5}
     density: {low: 0.2, medium: 0.0, high: 0.0}

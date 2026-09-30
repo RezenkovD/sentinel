@@ -113,6 +113,7 @@ class AggregatorAConfig(_Section):
     bias: float
     clip: float = Field(gt=0)
     reason_min_contribution: float = Field(ge=0)
+    quiet_motion_area: float = Field(ge=0)  # τ_quiet: an empty frame moving less than this is zero (SPEC §5)
     weights: dict[str, float]
     scale: dict[str, float]
     neutral: dict[str, float]

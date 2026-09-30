@@ -21,12 +21,16 @@ def _scene(
     interactions: list[Interaction] | None = None,
     weapon_visible: bool = False,
     zone: Zone = ZONE,
+    motion_area: float | None = None,
+    motion_energy: float | None = None,
 ) -> SceneDescription:
     persons = persons if persons is not None else [_person(1), _person(2)]
     speeds = [p.speed for p in persons if p.speed is not None]
     summary = Summary(
         n_persons=len(persons),
         crowd_motion=float(np.mean(speeds)) if speeds else (0.0 if not persons else None),
+        motion_energy=motion_energy,
+        motion_area=motion_area,
         weapon_visible=weapon_visible,
     )
     return SceneDescription(
@@ -78,13 +82,11 @@ def test_feature_order_is_fixed():
         "motion_area",
         "min_distance_h",
         "max_approach_speed",
-        "facing_close",
         "max_contact_s",
         "n_close_pairs",
-        "weapon_visible",
-        "weapon_held",
         "zone_prior",
         "limb_accel_missing",
+        "no_persons",
     )
 
 
@@ -101,8 +103,8 @@ def test_features_are_read_from_the_scene_by_name():
         and x["max_limb_accel"] == pytest.approx(6.0)
     )
     assert x["min_distance_h"] == pytest.approx(0.5) and x["max_approach_speed"] == pytest.approx(0.8)
-    assert (x["facing_close"], x["max_contact_s"], x["n_close_pairs"]) == (1.0, pytest.approx(3.0), 1.0)
-    assert (x["weapon_visible"], x["weapon_held"], x["limb_accel_missing"]) == (1.0, 1.0, 0.0)
+    assert (x["max_contact_s"], x["n_close_pairs"]) == (pytest.approx(3.0), 1.0)
+    assert (x["limb_accel_missing"], x["no_persons"]) == (0.0, 0.0)
 
 
 def test_v3_motion_features_are_read_from_the_scene():
@@ -168,15 +170,44 @@ def test_weapon_in_hand_overrides_to_alarm():
     assert result.level == "alarm"
 
 
-def test_weapon_only_in_view_is_just_a_feature():
+def test_weapons_are_not_features_of_a():
+    """Decision 30.09 (report 03): weapons act only through the override and the incident automaton."""
     a = _aggregator()
-    seen = a.assess(_scene(weapon_visible=True))
-    assert a.assess(_scene()).risk < seen.risk < CONFIG.incidents.theta_high + 0.1
+    assert a.assess(_scene(weapon_visible=True)).risk == a.assess(_scene()).risk
+    assert not {"weapon_visible", "weapon_held", "facing_close"} & set(FEATURE_NAMES)
 
 
-def test_empty_scene_has_zero_risk():
-    result = _aggregator().assess(_scene(persons=[]))
-    assert (result.risk, result.level) == (0.0, "normal")
+def _all_windows_model() -> RulesAggregator:
+    """A as fitted on all windows: pixel motion raises the risk, an empty frame has its own offset."""
+    weights = np.zeros(len(FEATURE_NAMES))
+    weights[FEATURE_NAMES.index("motion_area")] = 1.0
+    weights[FEATURE_NAMES.index("no_persons")] = -0.5
+    return RulesAggregator(
+        weights, -1.0, np.zeros(len(FEATURE_NAMES)), np.ones(len(FEATURE_NAMES)), 5.0, CONFIG, "score"
+    )
+
+
+def test_an_empty_scene_where_nothing_moves_is_zero_without_computation():
+    quiet = CONFIG.aggregator_a.quiet_motion_area
+    for a in (_aggregator(), _all_windows_model()):
+        for area in (None, 0.0, quiet * 0.5):
+            result = a.assess(_scene(persons=[], motion_area=area, motion_energy=0.1))
+            assert (result.risk, result.level) == (0.0, "normal")
+
+
+def test_an_empty_scene_with_motion_is_scored_by_a_fitted_on_all_windows():
+    """SPEC §5 (decision 30.09): with nobody detected, A still sees pixel motion — if it was fitted on such
+    windows; a model fitted on windows with people only keeps them at zero."""
+    a = _all_windows_model()
+    some = a.assess(_scene(persons=[], motion_area=0.5)).risk
+    much = a.assess(_scene(persons=[], motion_area=4.0)).risk
+    assert 0.0 < some < much
+    assert _aggregator().assess(_scene(persons=[], motion_area=4.0)).risk == 0.0
+
+
+def test_no_persons_is_an_indicator_of_the_empty_frame():
+    x = dict(zip(FEATURE_NAMES, scene_to_features(_scene(persons=[], motion_area=3.0), CONFIG), strict=True))
+    assert x["no_persons"] == 1.0 and x["n_persons"] == 0.0 and x["motion_area"] == pytest.approx(3.0)
 
 
 def test_reason_names_the_largest_contributions_in_ukrainian():
@@ -215,7 +246,7 @@ def test_fitted_model_survives_save_and_load(tmp_path: Path):
 def test_loading_weights_saved_for_other_features_fails(tmp_path: Path):
     path = tmp_path / "a.json"
     _aggregator().save(path)
-    path.write_text(path.read_text().replace('"weapon_held"', '"weapon_in_hand"'))
+    path.write_text(path.read_text().replace('"zone_prior",', '"zone_risk",', 1))
     with pytest.raises(ValueError):
         RulesAggregator.load(path, CONFIG)
 
@@ -271,9 +302,6 @@ def test_a_saved_model_keeps_its_own_input_settings(tmp_path: Path):
 
 def test_weapon_alarm_explanation_names_the_weapon_first():
     a = RulesAggregator.from_config(CONFIG)
-    a.weights = a.weights.copy()
-    a.weights[FEATURE_NAMES.index("weapon_held")] = 0.0  # a trained model may give the rare feature no weight
-    a.weights[FEATURE_NAMES.index("weapon_visible")] = 0.0
     scene = _scene(persons=[_person(1, speed=2.5, accel=30.0, holds="gun"), _person(2)])
     result = a.assess(scene)
     assert result.level == "alarm" and result.reason_uk.startswith("Зброя в руці: вогнепальна зброя")
@@ -291,3 +319,14 @@ def test_running_a_model_on_another_perception_is_reported(tmp_path: Path, capsy
     )
     make_aggregator(config)
     assert "perception" in capsys.readouterr().err
+
+
+def test_a_saved_model_keeps_its_empty_window_rule(tmp_path: Path):
+    path = tmp_path / "a.json"
+    _all_windows_model().save(path, extra={"perception_version": "3.1"})
+    edited = CONFIG.model_copy(
+        update={"aggregator_a": CONFIG.aggregator_a.model_copy(update={"quiet_motion_area": 50.0})}
+    )
+    loaded = RulesAggregator.load(path, edited)
+    assert loaded.empty_windows == "score"
+    assert loaded.assess(_scene(persons=[], motion_area=4.0)).risk > 0.0  # its own τ_quiet, not 50 %
