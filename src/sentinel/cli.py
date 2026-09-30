@@ -63,6 +63,19 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="WEAPONS",
         help="full pipeline for weapon-detector variants, e.g. 480:1 640:1 640:2 crops320:2",
     )
+    bench.add_argument(
+        "--quiet",
+        action="store_true",
+        help="with --pipeline: measure every --people x weapons x --backends combination in quiet windows",
+    )
+    bench.add_argument(
+        "--people",
+        nargs="+",
+        metavar="SOURCE:WEIGHTS",
+        help="people sources for --quiet, e.g. detect:weights/yolo11n.pt pose:weights/yolo26n-pose.pt",
+    )
+    bench.add_argument("--backends", nargs="+", choices=["torch", "openvino"], default=["torch", "openvino"])
+    bench.add_argument("--deadline-h", type=float, default=20.0, help="--quiet gives up after this long")
     return parser
 
 
@@ -86,6 +99,22 @@ def main(argv: list[str] | None = None) -> int:
 
         for pt in weights_to_export(config):
             print(f"{pt} -> {export_openvino(pt)}")
+        return 0
+    if args.command == "bench" and args.pipeline and args.quiet:
+        from sentinel.bench import PeopleVariant, WeaponVariant, run_quiet_bench
+
+        people = [PeopleVariant.parse(v) for v in args.people or [f"detect:{config.models.people.weights}"]]
+        report = run_quiet_bench(
+            config,
+            args.source,
+            people,
+            [WeaponVariant.parse(v) for v in args.pipeline],
+            args.backends,
+            config.bench.warmup_frames if args.warmup is None else args.warmup,
+            args.out or Path("results") / f"bench_quiet_{date.today().isoformat()}.md",
+            args.deadline_h,
+        )
+        print(f"report: {report}")
         return 0
     if args.command == "bench" and args.pipeline:
         from sentinel.bench import WeaponVariant, run_pipeline_bench

@@ -522,73 +522,88 @@ class _NoNotifier:
         pass
 
 
+def measure_pipeline(
+    cfg, sources: Sequence[Path], warmup: int, during: Callable[[], None] | None = None
+) -> dict:
+    """One configuration: warm-up, an offline pass (stage times, RTF) and a paced pass (like a live camera).
+
+    `during` is called after every processed frame (e.g. to sample the machine load).
+    """
+    from sentinel.pipeline import build_pipeline
+
+    fps = cfg.analysis.fps
+    tick = during or (lambda: None)
+    pipeline = build_pipeline(cfg, cfg.source.camera_id, "bench", None, _NoNotifier())
+    with LatestFrameReader(sources[0], mode="offline") as reader:
+        for _, frame in zip(range(warmup), reader, strict=False):
+            pipeline.process(frame)
+    stages: dict[str, list[float]] = {}
+    totals: list[float] = []
+    wall = duration = 0.0
+    for source in sources:  # offline: every frame on the analysis grid, decoding included
+        pipeline.reset(run_id="bench")
+        started = time.perf_counter()
+        with LatestFrameReader(source, mode="offline", target_fps=fps) as reader:
+            for frame in reader:
+                pipeline.process(frame)
+                for stage, ms in pipeline.last_timing_ms.items():
+                    stages.setdefault(stage, []).append(ms)
+                totals.append(sum(pipeline.last_timing_ms.values()))
+                tick()
+            pipeline.finish()
+            wall += time.perf_counter() - started
+            duration += reader.stats.received / reader.source_fps
+    latency: list[float] = []
+    delivered = received = 0
+    paced_wall = 0.0
+    for source in sources:  # paced: like a live camera
+        pipeline.reset(run_id="bench")
+        with LatestFrameReader(source, mode="paced", target_fps=fps) as reader:
+            started = time.monotonic()
+            for frame in reader:
+                pipeline.process(frame)
+                latency.append((time.monotonic() - started - frame.t) * 1000)
+                tick()
+            pipeline.finish()
+            paced_wall += time.monotonic() - started
+            delivered += reader.stats.delivered
+            received += reader.stats.received
+    return {
+        "stages_ms": {k: asdict(timing(v)) for k, v in stages.items()},
+        "total_ms": asdict(timing(totals)),
+        "rtf": wall / duration,
+        "paced": {
+            "effective_fps": delivered / paced_wall,
+            "skipped_share": 1 - delivered / received,
+            "latency_ms": asdict(timing(latency)),
+        },
+        "frames": len(totals),
+    }
+
+
+def with_weapons(config, variant: "WeaponVariant", out: Path):
+    weapons = config.weapons.model_copy(
+        update={"mode": variant.mode, "imgsz": variant.imgsz, "every_n_frames": variant.every_n_frames}
+    )
+    incidents = config.incidents.model_copy(update={"output_dir": out.parent / f"{out.stem}_keyframes"})
+    return config.model_copy(update={"weapons": weapons, "incidents": incidents})
+
+
 def run_pipeline_bench(
     config, sources: Sequence[Path], variants: Sequence[WeaponVariant], warmup: int, out: Path
 ) -> Path:
     """Full pipeline per weapon-detector variant: offline RTF + stage times, then a paced pass."""
-    from sentinel.pipeline import build_pipeline
-
-    fps = config.analysis.fps
     power = read_power_state()
     rows = []
     for variant in variants:
-        weapons = config.weapons.model_copy(
-            update={"mode": variant.mode, "imgsz": variant.imgsz, "every_n_frames": variant.every_n_frames}
-        )
-        incidents = config.incidents.model_copy(update={"output_dir": out.parent / f"{out.stem}_keyframes"})
-        cfg = config.model_copy(update={"weapons": weapons, "incidents": incidents})
-        pipeline = build_pipeline(cfg, cfg.source.camera_id, "bench", None, _NoNotifier())
-        with LatestFrameReader(sources[0], mode="offline") as reader:
-            for _, frame in zip(range(warmup), reader, strict=False):
-                pipeline.process(frame)
-        stages: dict[str, list[float]] = {}
-        totals: list[float] = []
-        wall = duration = 0.0
-        for source in sources:  # offline: every frame on the analysis grid, decoding included
-            pipeline.reset(run_id="bench")
-            started = time.perf_counter()
-            with LatestFrameReader(source, mode="offline", target_fps=fps) as reader:
-                for frame in reader:
-                    pipeline.process(frame)
-                    for stage, ms in pipeline.last_timing_ms.items():
-                        stages.setdefault(stage, []).append(ms)
-                    totals.append(sum(pipeline.last_timing_ms.values()))
-                pipeline.finish()
-                wall += time.perf_counter() - started
-                duration += reader.stats.received / reader.source_fps
-        latency: list[float] = []
-        delivered = received = 0
-        paced_wall = 0.0
-        for source in sources:  # paced: like a live camera
-            pipeline.reset(run_id="bench")
-            with LatestFrameReader(source, mode="paced", target_fps=fps) as reader:
-                started = time.monotonic()
-                for frame in reader:
-                    pipeline.process(frame)
-                    latency.append((time.monotonic() - started - frame.t) * 1000)
-                pipeline.finish()
-                paced_wall += time.monotonic() - started
-                delivered += reader.stats.delivered
-                received += reader.stats.received
         rows.append(
-            {
-                "variant": variant.label,
-                "stages_ms": {k: asdict(timing(v)) for k, v in stages.items()},
-                "total_ms": asdict(timing(totals)),
-                "rtf": wall / duration,
-                "paced": {
-                    "effective_fps": delivered / paced_wall,
-                    "skipped_share": 1 - delivered / received,
-                    "latency_ms": asdict(timing(latency)),
-                },
-                "frames": len(totals),
-            }
+            {"variant": variant.label} | measure_pipeline(with_weapons(config, variant, out), sources, warmup)
         )
         print(json.dumps(rows[-1]), flush=True)
     report = {
         "power": asdict(power),
         "device": config.models.runtime_device,
-        "fps": fps,
+        "fps": config.analysis.fps,
         "clips": [s.name for s in sources],
         "warmup": warmup,
         "rows": rows,
@@ -633,3 +648,181 @@ def render_pipeline_report(report: dict, sources: Sequence[Path]) -> str:
             f"{p['latency_ms']['mean_ms']:.0f} / {p['latency_ms']['p95_ms']:.0f} |"
         )
     return "\n".join(lines) + "\n"
+
+
+# --- quiet-window bench (session 03, step 1) ---
+
+
+@dataclass(frozen=True)
+class PeopleVariant:
+    source: str  # "detect" (detector + pose model) or "pose" (the pose model tracked itself)
+    weights: Path  # the detector, or the pose model for source "pose"
+
+    @classmethod
+    def parse(cls, text: str) -> "PeopleVariant":
+        """ "detect:weights/yolo11n.pt" or "pose:weights/yolo26n-pose.pt"."""
+        source, sep, weights = text.partition(":")
+        if not sep or source not in ("detect", "pose") or not weights:
+            raise ValueError(
+                f"people variant must look like detect:<weights> or pose:<weights>, got {text!r}"
+            )
+        return cls(source, Path(weights))
+
+    @property
+    def label(self) -> str:
+        return f"{self.weights.stem} {'track' if self.source == 'pose' else 'detect'}"
+
+
+def with_people(config, variant: PeopleVariant):
+    m = config.models
+    people = m.people.model_copy(update={"source": variant.source})
+    pose = m.pose
+    if variant.source == "detect":
+        people = people.model_copy(update={"weights": variant.weights})
+    else:
+        pose = pose.model_copy(update={"weights": variant.weights})
+    return config.model_copy(update={"models": m.model_copy(update={"people": people, "pose": pose})})
+
+
+def with_backend(config, backend: str):
+    return config.model_copy(update={"models": config.models.model_copy(update={"backend": backend})})
+
+
+def _cell(stage: dict) -> str:
+    return f"{stage['mean_ms']:.1f} / {stage['p95_ms']:.1f}"
+
+
+def render_quiet_report(rows: Sequence[dict], sources: Sequence[Path]) -> str:
+    """Latest clean (not noisy) measurement per combination; noisy attempts are only counted."""
+    latest: dict[tuple, dict] = {}
+    for row in rows:
+        if not row["noisy"]:
+            latest[(row["people"], row["weapons"], row["backend"])] = row
+    noisy = sum(row["noisy"] for row in rows)
+    lines = [
+        f"# Bench: тихий замір повного конвеєра — {time.strftime('%Y-%m-%d')}",
+        "",
+        "Середовище: " + "; ".join(environment_notes()) + ".",
+        f"Кліпів {len(sources)}; частота аналізу 10 кадрів/с. Замір стартує, коли 1-хвилинне середнє чужого "
+        "навантаження (задачі, що виконуються або чекають введення-виведення, без наших процесів) < 1,5 "
+        "протягом 2 хв, від мережі, профіль `performance`; прогін, під час якого воно перевищило 2, — шумний "
+        "і повторюється. Наше фонове вилучення на час заміру призупинено.",
+        f"Шумних прогонів: {noisy}.",
+        "",
+        "| джерело людей | зброя | бекенд | люди, мс | поза, мс | зброя, мс | разом, мс | RTF@10 | "
+        "paced: кадр/с | пропущено | затримка p95, мс | чуже навантаження сер. / макс. | load avg | час |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    for (people, weapons, backend), row in sorted(latest.items()):
+        s, p = row["stages_ms"], row["paced"]
+        lines.append(
+            f"| {people} | {weapons} | {backend} | {_cell(s['people'])} | {_cell(s['pose'])} | "
+            f"{_cell(s['weapons'])} | {_cell(row['total_ms'])} | {row['rtf']:.2f} | "
+            f"{p['effective_fps']:.1f} | {p['skipped_share']:.0%} | {p['latency_ms']['p95_ms']:.0f} | "
+            f"{row['foreign_load_mean']:.2f} / {row['foreign_load_max']:.2f} | "
+            f"{row['load_start']:.2f} → {row['load_end']:.2f} | {row['time'][11:16]} |"
+        )
+    lines += [
+        "",
+        "`load avg` — системний 1-хвилинний load average на початку й наприкінці прогону (з нашим заміром).",
+        "Мс/кадр — `середнє / p95`; RTF — offline (з декодуванням); paced — кліпи в темпі камери.",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def run_quiet_bench(
+    config,
+    sources: Sequence[Path],
+    people: Sequence[PeopleVariant],
+    weapons: Sequence[WeaponVariant],
+    backends: Sequence[str],
+    warmup: int,
+    out: Path,
+    deadline_h: float,
+) -> Path:
+    """Every people source x weapon variant x backend, each measured in its own quiet window."""
+    import os
+    from datetime import datetime
+
+    import sentinel.agents.context  # noqa: F401  (imported now: the code measured is the code at launch)
+    import sentinel.agents.detector  # noqa: F401
+    import sentinel.agents.features  # noqa: F401
+    import sentinel.agents.pose_features  # noqa: F401
+    import sentinel.agents.weapons  # noqa: F401
+    import sentinel.aggregators.rules  # noqa: F401
+    import sentinel.incidents  # noqa: F401
+    import sentinel.keyframe  # noqa: F401
+    import sentinel.pipeline  # noqa: F401
+    import sentinel.scene  # noqa: F401
+    from sentinel.models import export_openvino
+    from sentinel.quiet import (
+        QuietRunner,
+        extraction_pid,
+        foreign_load,
+        machine_load_average,
+        pause_extraction,
+        resume_extraction,
+    )
+
+    if "openvino" in backends:
+        for pt in {config.weapons.weights, config.models.pose.weights, *(v.weights for v in people)}:
+            export_openvino(pt)
+    resume_extraction()  # a run killed mid-measurement may have left the extraction paused
+    commit = subprocess.run(
+        ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=False
+    ).stdout.strip()
+    jsonl = out.with_suffix(".jsonl")
+
+    def own() -> set[int]:
+        return {os.getpid()} | ({pid} if (pid := extraction_pid()) is not None else set())
+
+    def measure(combo: tuple, during: Callable[[], None]) -> dict:
+        backend, people_variant, weapon_variant = combo
+        cfg = with_backend(with_people(with_weapons(config, weapon_variant, out), people_variant), backend)
+        last = [0.0]
+
+        def tick() -> None:  # sample the load about once a second
+            if time.monotonic() - last[0] >= 1.0:
+                last[0] = time.monotonic()
+                during()
+
+        load_start = machine_load_average()
+        row = measure_pipeline(cfg, sources, warmup, tick)
+        return row | {
+            "backend": backend,
+            "people": people_variant.label,
+            "weapons": weapon_variant.label,
+            "power": asdict(read_power_state()),
+            "load_start": load_start,
+            "load_end": machine_load_average(),
+            "time": datetime.now().isoformat(timespec="seconds"),
+            "commit": commit,
+            "clips": [s.name for s in sources],
+        }
+
+    def save(row: dict) -> None:
+        _append_jsonl_row(jsonl, row)
+        out.write_text(render_quiet_report(_read_jsonl(jsonl), sources), encoding="utf-8")
+
+    def power() -> tuple[bool, str]:
+        state = read_power_state()
+        return state.source == "ac", state.profile
+
+    runner = QuietRunner(
+        sample=lambda: foreign_load(own),
+        measure=measure,
+        power=power,
+        pause=pause_extraction,
+        resume=resume_extraction,
+        log=lambda message: print(time.strftime("%Y-%m-%d %H:%M:%S"), message, flush=True),
+        on_row=save,
+    )
+    combos = [(b, p, w) for p in people for w in weapons for b in backends]  # the first people source first
+    runner.run(combos, deadline_s=deadline_h * 3600)
+    return out
+
+
+def _append_jsonl_row(jsonl: Path, row: dict) -> None:
+    jsonl.parent.mkdir(parents=True, exist_ok=True)
+    with jsonl.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row, ensure_ascii=False) + "\n")

@@ -270,3 +270,61 @@ def test_openvino_backend_loads_the_exports_of_all_three_models(tmp_path: Path):
         "pose": "pose_openvino_model",
         "weapons": "best_openvino_model",
     }
+
+
+def test_people_variants_are_parsed_and_applied_to_the_config():
+    from sentinel.bench import PeopleVariant, with_people
+    from sentinel.config import DEFAULT_CONFIG, load_config
+
+    config = load_config(Path(__file__).parents[1] / DEFAULT_CONFIG)
+    detect = PeopleVariant.parse("detect:weights/yolo11n.pt")
+    pose = PeopleVariant.parse("pose:weights/yolo26n-pose.pt")
+    assert (detect.label, pose.label) == ("yolo11n detect", "yolo26n-pose track")
+    cfg = with_people(config, detect)
+    assert cfg.models.people.source == "detect" and cfg.models.people.weights == Path("weights/yolo11n.pt")
+    assert cfg.models.pose.weights == config.models.pose.weights  # skeletons still from the pose model
+    cfg = with_people(config, pose)
+    assert cfg.models.people.source == "pose" and cfg.models.pose.weights == Path("weights/yolo26n-pose.pt")
+    with pytest.raises(ValueError):
+        PeopleVariant.parse("weights/yolo11n.pt")
+
+
+def _quiet_row(backend: str, noisy: bool, rtf: float) -> dict:
+    stage = {"mean_ms": 10.0, "p95_ms": 20.0}
+    return {
+        "backend": backend,
+        "people": "yolo26n-pose track",
+        "weapons": "480:2",
+        "stages_ms": {k: stage for k in ("people", "pose", "weapons", "scene", "decision")},
+        "total_ms": {"mean_ms": 50.0, "p95_ms": 90.0},
+        "rtf": rtf,
+        "paced": {
+            "effective_fps": 9.9,
+            "skipped_share": 0.67,
+            "latency_ms": {"mean_ms": 60.0, "p95_ms": 80.0},
+        },
+        "frames": 1000,
+        "power": {"source": "ac", "profile": "performance"},
+        "load_start": 0.4,
+        "load_end": 3.9,
+        "time": "2026-09-30T23:10:00",
+        "commit": "abc1234",
+        "noisy": noisy,
+        "foreign_load_mean": 2.5 if noisy else 0.3,
+        "foreign_load_max": 3.1 if noisy else 0.6,
+    }
+
+
+def test_quiet_report_shows_the_latest_clean_row_per_combination_and_counts_noisy_ones():
+    from sentinel.bench import render_quiet_report
+
+    rows = [
+        _quiet_row("torch", noisy=True, rtf=1.3),
+        _quiet_row("torch", noisy=False, rtf=0.61),
+        _quiet_row("openvino", noisy=False, rtf=0.5),
+    ]
+    text = render_quiet_report(rows, sources=[])
+    table = [line for line in text.splitlines() if line.startswith("| yolo26n-pose track")]
+    assert len(table) == 2 and any("| torch |" in row and "| 0.61 |" in row for row in table)
+    assert "1.30" not in text
+    assert "Шумних прогонів: 1." in text
