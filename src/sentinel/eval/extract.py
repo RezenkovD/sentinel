@@ -286,14 +286,19 @@ def xd_episodes(subset: Path, videos: Path, annotations: Path, fps: float) -> li
 
     events_by_name: dict[str, list[int]] = {}
     for line in annotations.read_text().splitlines():
+        if not line.strip():
+            continue
         name, *numbers = line.split()
-        events_by_name[name] = [int(n) for n in numbers]
+        events_by_name[name.removesuffix(".mp4")] = [int(n) for n in numbers]  # 14 names carry the extension
     episodes = []
     for video in json.loads(subset.read_text())["videos"]:
         path = videos / f"{video['name']}.mp4"
         cap = cv2.VideoCapture(str(path))
-        video_fps = cap.get(cv2.CAP_PROP_FPS) or 24.0  # annotation frames are frames of the video itself
+        video_fps = cap.get(cv2.CAP_PROP_FPS)  # annotation frames are frames of the video itself
+        video_fps = video_fps if video_fps > 0 else 24.0  # XD-Violence videos are 24 frames/s
         cap.release()
+        if video["stratum"] != "A" and video["name"] not in events_by_name:
+            raise ValueError(f"{video['name']}: a violent test video without frame annotation")
         numbers = events_by_name.get(video["name"], [])
         events = [(numbers[i] / video_fps, numbers[i + 1] / video_fps) for i in range(0, len(numbers) - 1, 2)]
 

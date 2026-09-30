@@ -166,3 +166,36 @@ def test_weapon_variant_for_a_separate_cache_is_applied_to_the_config():
         0.40,
     )
     assert perception_hash(cfg) != perception_hash(CONFIG)  # a separate cache, never mixed with the main one
+
+
+def _xd_files(tmp_path: Path, annotation_lines: list[str], videos: list[dict]) -> tuple[Path, Path]:
+    annotations = tmp_path / "annotations.txt"
+    annotations.write_text("\n".join(annotation_lines))
+    subset = tmp_path / "subset.json"
+    subset.write_text(json.dumps({"videos": videos}))
+    return subset, annotations
+
+
+def test_xd_annotation_names_may_carry_the_file_extension(tmp_path: Path):
+    from sentinel.eval.extract import xd_episodes
+
+    subset, annotations = _xd_files(
+        tmp_path,
+        ["v=abc__#1_label_B1-0-0.mp4 24 48 96 120", "v=def__#1_label_B2-0-0 0 24"],
+        [
+            {"name": "v=abc__#1_label_B1-0-0", "stratum": "B1", "duration_s": 10.0},
+            {"name": "v=def__#1_label_B2-0-0", "stratum": "B2", "duration_s": 10.0},
+        ],
+    )
+    episodes = xd_episodes(subset, tmp_path, annotations, fps=10.0)  # no video files: 24 frames/s assumed
+    assert episodes[0].events == [(1.0, 2.0), (4.0, 5.0)] and episodes[1].events == [(0.0, 1.0)]
+
+
+def test_a_violent_xd_video_without_annotation_is_an_error(tmp_path: Path):
+    from sentinel.eval.extract import xd_episodes
+
+    subset, annotations = _xd_files(
+        tmp_path, [], [{"name": "v=abc__#1_label_B1-0-0", "stratum": "B1", "duration_s": 10.0}]
+    )
+    with pytest.raises(ValueError, match="annotation"):
+        xd_episodes(subset, tmp_path, annotations, fps=10.0)
