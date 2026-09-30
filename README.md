@@ -30,8 +30,8 @@ uv run sentinel run --source 0                     # вебкамера; так�
 Без `TELEGRAM_TOKEN` і `TELEGRAM_CHAT_IDS` у `.env` сповіщення йдуть у консоль і `results/incidents.jsonl`.
 Демонстрацію й заміри запускати лише від мережі, у профілі `powerprofilesctl set performance`.
 
-Моделі на OpenVINO (`models.backend: openvino`) потребують разового експорту; він перегенеровується, коли
-змінюються ваги:
+Бекенд моделей за замовчуванням — OpenVINO (`models.backend: openvino`, рішення 30.09). Він потребує разового
+експорту, який перегенеровується, коли змінюються ваги; без нього `sentinel run` зупиниться з підказкою:
 
 ```bash
 uv run sentinel export
