@@ -197,10 +197,14 @@ def test_calm_scene_reason_says_so():
 
 def test_fitted_model_survives_save_and_load(tmp_path: Path):
     rng = np.random.default_rng(0)
-    x_calm = rng.normal(0.0, 1.0, size=(50, len(FEATURE_NAMES)))
-    x_fight = x_calm + 3.0
-    a = _aggregator()
-    a.fit(np.vstack([x_calm, x_fight]), np.array([0] * 50 + [1] * 50))
+    a = RulesAggregator(  # numbers as a fit would leave them (training itself: sentinel.eval.train_a)
+        weights=rng.normal(0.0, 1.0, len(FEATURE_NAMES)),
+        bias=-0.3,
+        mean=rng.normal(0.0, 1.0, len(FEATURE_NAMES)),
+        scale=rng.uniform(0.5, 2.0, len(FEATURE_NAMES)),
+        clip=5.0,
+        config=CONFIG,
+    )
     path = tmp_path / "a.json"
     a.save(path)
     b = RulesAggregator.load(path, CONFIG)
@@ -247,3 +251,29 @@ def test_config_chooses_a_trained_model_or_the_hand_weights(tmp_path: Path):
     assert np.allclose(make_aggregator(config).weights, trained.weights)
     hand = CONFIG.model_copy(update={"aggregator_a": CONFIG.aggregator_a.model_copy(update={"model": None})})
     assert np.allclose(make_aggregator(hand).weights, _aggregator().weights)
+
+
+def test_a_saved_model_keeps_its_own_input_settings(tmp_path: Path):
+    # the neutral table is shared with the hand-set weights in the config; editing it must not shift a
+    # trained model's inputs
+    a = RulesAggregator.from_config(CONFIG)
+    a.weights = np.linspace(-1.0, 1.0, len(FEATURE_NAMES))
+    path = tmp_path / "a.json"
+    a.save(path, extra={"perception_version": "3.0"})
+    scene = _scene(persons=[_person(1, speed=None, accel=None)])  # no pairs: min_distance_h takes neutral
+    before = RulesAggregator.load(path, CONFIG).assess(scene).risk
+    neutral = dict(CONFIG.aggregator_a.neutral) | {"min_distance_h": 0.1, "max_speed": 3.0}
+    edited = CONFIG.model_copy(
+        update={"aggregator_a": CONFIG.aggregator_a.model_copy(update={"neutral": neutral})}
+    )
+    assert RulesAggregator.load(path, edited).assess(scene).risk == before
+
+
+def test_weapon_alarm_explanation_names_the_weapon_first():
+    a = RulesAggregator.from_config(CONFIG)
+    a.weights = a.weights.copy()
+    a.weights[FEATURE_NAMES.index("weapon_held")] = 0.0  # a trained model may give the rare feature no weight
+    a.weights[FEATURE_NAMES.index("weapon_visible")] = 0.0
+    scene = _scene(persons=[_person(1, speed=2.5, accel=30.0, holds="gun"), _person(2)])
+    result = a.assess(scene)
+    assert result.level == "alarm" and result.reason_uk.startswith("Зброя в руці: вогнепальна зброя")

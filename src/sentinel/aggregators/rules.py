@@ -219,6 +219,9 @@ class RulesAggregator:
         floor = self.config.aggregator_a.reason_min_contribution
         phrases: list[str] = []
         groups: set[str] = set()
+        if x["weapon_held"]:  # the override decided the alarm: say so first, whatever the regression weights
+            phrases.append(_reason("weapon_held", x, scene))
+            groups.add("weapon_held")
         for i in np.argsort(-contributions):
             name = FEATURE_NAMES[i]
             if contributions[i] < floor or len(phrases) == 3:
@@ -233,18 +236,6 @@ class RulesAggregator:
         text = "; ".join(phrases)
         return text[0].upper() + text[1:]
 
-    def fit(self, features: np.ndarray, labels: np.ndarray, seed: int = 0) -> None:
-        """Logistic regression on standardised features (train split only)."""
-        from sklearn.linear_model import LogisticRegression
-
-        self.mean = features.mean(axis=0)
-        self.scale = np.where(features.std(axis=0) > 0, features.std(axis=0), 1.0)
-        model = LogisticRegression(random_state=seed, max_iter=1000).fit(self._standardise(features), labels)
-        self.weights, self.bias = model.coef_[0], float(model.intercept_[0])
-        self._neutral_z = self._standardise(
-            np.array([self.config.aggregator_a.neutral[n] for n in FEATURE_NAMES])
-        )
-
     def save(self, path: Path, extra: dict | None = None) -> None:
         """Weights with the feature list and schema version; `extra` adds metadata (training, thresholds)."""
         data = {
@@ -255,6 +246,12 @@ class RulesAggregator:
             "scale": self.scale.tolist(),
             "clip": self.clip,
             "schema_version": SCHEMA_VERSION,
+            # what turns a scene into the inputs: pinned, so later config edits cannot shift a trained model
+            "input_settings": {
+                "neutral": dict(self.config.aggregator_a.neutral),
+                "zone_prior": self.config.aggregator_a.zone_prior.model_dump(),
+                "contact_distance_h": self.config.features.contact_distance_h,
+            },
         } | (extra or {})
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         Path(path).write_text(json.dumps(data, indent=1, ensure_ascii=False), encoding="utf-8")
@@ -276,6 +273,22 @@ class RulesAggregator:
                 f"{path} was trained on perception {data['perception_version']}, this is {PERCEPTION_VERSION}"
             )
         arrays = {k: np.array(data[k], dtype=float) for k in ("weights", "mean", "scale")}
+        pinned = data.get("input_settings")
+        if pinned is not None:
+            a = config.aggregator_a
+            config = config.model_copy(
+                update={
+                    "aggregator_a": a.model_copy(
+                        update={
+                            "neutral": pinned["neutral"],
+                            "zone_prior": a.zone_prior.model_validate(pinned["zone_prior"]),
+                        }
+                    ),
+                    "features": config.features.model_copy(
+                        update={"contact_distance_h": pinned["contact_distance_h"]}
+                    ),
+                }
+            )
         return cls(
             arrays["weights"], float(data["bias"]), arrays["mean"], arrays["scale"], data["clip"], config
         )
