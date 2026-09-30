@@ -319,6 +319,17 @@ def xd_episodes(subset: Path, videos: Path, annotations: Path, fps: float) -> li
 # --- the command ---
 
 
+def with_weapon_variant(config: Config, variant: str, conf: float | None = None) -> Config:
+    """Weapon detector variant (e.g. crops320:2) and threshold for a separate cache (step 5 comparison)."""
+    from sentinel.bench import WeaponVariant
+
+    v = WeaponVariant.parse(variant)
+    update = {"mode": v.mode, "imgsz": v.imgsz, "every_n_frames": v.every_n_frames}
+    if conf is not None:
+        update["conf"] = conf
+    return config.model_copy(update={"weapons": config.weapons.model_copy(update=update)})
+
+
 def dataset_config(config: Config, dataset: str) -> Config:
     """Sevilla is 2 frames/s of stills: analyse every frame and run the weapon detector on each of them."""
     if dataset != "us_gun":
@@ -356,6 +367,11 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--backend", choices=["torch", "openvino"], help="default: models.backend of the config"
     )
+    parser.add_argument("--weapons", help="weapon detector variant for a separate cache, e.g. crops320:2")
+    parser.add_argument("--weapon-conf", type=float, help="weapon score threshold with --weapons")
+    parser.add_argument(
+        "--classes", nargs="+", choices=["Fight", "NonFight"], help="rwf2000: only these classes"
+    )
     parser.add_argument("--out", type=Path, default=OUT)
     parser.add_argument("--redo", action="store_true", help="replace files made by another perception")
     args = parser.parse_args(argv)
@@ -370,6 +386,8 @@ def main(argv: list[str] | None = None) -> None:
         config = config.model_copy(
             update={"models": config.models.model_copy(update={"backend": args.backend})}
         )
+    if args.weapons:
+        config = with_weapon_variant(config, args.weapons, args.weapon_conf)
     stages = (
         [
             ("rwf2000", ["train", "val"]),
@@ -391,9 +409,12 @@ def main(argv: list[str] | None = None) -> None:
 
 def _episodes(dataset: str, parts: list[str], args, fps: float) -> list[Episode]:
     if dataset == "rwf2000":
-        return rwf_episodes(
+        episodes = rwf_episodes(
             Path("data/splits/rwf2000.json"), Path("data/raw/rwf2000"), parts, args.per_class, args.seed, fps
         )
+        classes = {"Fight": 1, "NonFight": 0}
+        wanted = {classes[c] for c in args.classes} if args.classes else {0, 1}
+        return [e for e in episodes if e.label in wanted]
     if dataset == "us_gun":
         return sevilla_episodes(Path("data/splits/us_gun.json"), Path("data/raw/us-gun/Images"), parts)
     return xd_episodes(
