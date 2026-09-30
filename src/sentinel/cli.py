@@ -17,6 +17,7 @@ EVAL_COMMANDS = {
     "xd-subset": ("xd_subset", False),
     "feature-auc": ("feature_auc", True),
     "train-a": ("train_a", True),
+    "weapon-rule": ("weapon_rule", False),
 }
 
 

@@ -71,6 +71,28 @@ class Incident:
     extra: dict = field(default_factory=dict)
 
 
+class WeaponConfirmation:
+    """The same track holds a weapon in `windows` consecutive windows (decision 30.09.3).
+
+    Shared by the incident automaton and the evaluation of the rule on cached episodes.
+    """
+
+    def __init__(self, windows: int) -> None:
+        self.windows = windows
+        self._holders: deque[tuple[float, float, frozenset[int]]] = deque(maxlen=windows)
+
+    def update(self, scene: SceneDescription) -> bool:
+        window = scene.window
+        if self._holders and abs(self._holders[-1][1] - window.t_start) > 0.011:  # a gap (2-decimal times)
+            self._holders.clear()
+        self._holders.append(
+            (window.t_start, window.t_end, frozenset(p.id for p in scene.persons if p.holds))
+        )
+        return len(self._holders) == self.windows and bool(
+            frozenset.intersection(*(ids for _, _, ids in self._holders))
+        )
+
+
 def participants(scene: SceneDescription) -> set[int]:
     """People involved: those in described pairs or holding a weapon; everyone in view if nobody is."""
     involved = {i for pair in scene.interactions for i in pair.pair}
@@ -93,8 +115,7 @@ class IncidentManager:
         self._last: Incident | None = None
         self._quiet_since: float | None = None
         self._opens: deque[float] = deque()
-        # (window start, window end, ids holding a weapon) of the last windows, for the weapon confirmation
-        self._holders: deque[tuple[float, float, frozenset[int]]] = deque(maxlen=cfg.weapon_confirm_windows)
+        self._weapon = WeaponConfirmation(cfg.weapon_confirm_windows)
         self._weapon_confirmed_now = False
         self._summary: tuple[str, float, int] | None = None  # id, minute start, suppressed count
         self._count = 0
@@ -242,17 +263,8 @@ class IncidentManager:
     # --- helpers ---
 
     def _weapon_confirmed(self, scene: SceneDescription) -> bool:
-        """The same track holds a weapon in the last `weapon_confirm_windows` consecutive windows."""
-        window = scene.window
-        if self._holders and abs(self._holders[-1][1] - window.t_start) > 0.011:  # a gap (2-decimal times)
-            self._holders.clear()
-        holders = frozenset(p.id for p in scene.persons if p.holds)
-        self._holders.append((window.t_start, window.t_end, holders))
-        confirmed = len(self._holders) == self.cfg.weapon_confirm_windows and bool(
-            frozenset.intersection(*(ids for _, _, ids in self._holders))
-        )
-        self._weapon_confirmed_now = confirmed
-        return confirmed
+        self._weapon_confirmed_now = self._weapon.update(scene)
+        return self._weapon_confirmed_now
 
     def _joins(self, last: Incident, people: set[int], t: float) -> bool:
         since_close = t - (last.closed_at or t)
