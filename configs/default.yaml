@@ -49,6 +49,12 @@ features:                 # person and pair features over a window (SPEC §4–5
   max_pairs: 5            # …at most this many, nearest first
   contact_distance_h: 1.0 # a pair closer than this is in contact (duration_s)
   facing_min_offset_h: 0.03 # nose-to-shoulder-midpoint horizontal offset that shows which way a person faces
+  smooth_points: 5        # keypoint trajectories: local least-squares fits over this many points…
+  max_gap_s: 0.3          # …never across a gap without the person longer than this
+
+motion:                   # pixel motion, independent of person detection (schema v3)
+  max_width: 160          # grey frames shrunk to at most this width before differencing
+  threshold: 15           # grey levels (0-255): a pixel changed by more than this counts in motion_area
 
 context:
   zones: configs/zones.yaml
@@ -59,11 +65,17 @@ aggregator_a:               # A v0 — hand-set weights (training comes after th
   bias: -1.5                # v0.1 (29.09): tuned on the sanity samples, see docs/DECISIONS.md
   clip: 5.0
   reason_min_contribution: 0.25  # explanations name features that add at least this much to the logit
-  weights:
+  weights:                  # v3 features (schema v3) get 0 until A is trained
     n_persons: 0.1
     crowd_motion: 0.8
     max_speed: 0.8
+    pair_max_speed: 0.0
+    max_limb_speed: 0.0
     max_limb_accel: 0.4
+    max_pose_motion: 0.0
+    max_person_motion: 0.0
+    motion_energy: 0.0
+    motion_area: 0.0
     min_distance_h: -1.0
     max_approach_speed: 0.6
     facing_close: 0.5
@@ -77,7 +89,13 @@ aggregator_a:               # A v0 — hand-set weights (training comes after th
     n_persons: 5.0
     crowd_motion: 1.0       # heights/s
     max_speed: 2.0          # heights/s
+    pair_max_speed: 2.0     # heights/s
+    max_limb_speed: 2.0     # heights/s
     max_limb_accel: 20.0    # heights/s²
+    max_pose_motion: 1.0    # heights/s
+    max_person_motion: 20.0 # grey levels
+    motion_energy: 10.0     # grey levels
+    motion_area: 10.0       # % of the frame
     min_distance_h: 2.0     # heights
     max_approach_speed: 2.0 # heights/s
     facing_close: 1.0
@@ -91,7 +109,13 @@ aggregator_a:               # A v0 — hand-set weights (training comes after th
     n_persons: 0.0
     crowd_motion: 0.0
     max_speed: 0.0
+    pair_max_speed: 0.0
+    max_limb_speed: 0.0
     max_limb_accel: 0.0
+    max_pose_motion: 0.0
+    max_person_motion: 0.0
+    motion_energy: 0.0
+    motion_area: 0.0
     min_distance_h: 2.0     # nobody within the pair limit
     max_approach_speed: 0.0
     facing_close: 0.0

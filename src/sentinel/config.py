@@ -85,9 +85,16 @@ class FeaturesConfig(_Section):
     max_pairs: int = Field(ge=0, le=5)  # SPEC §5: at most 5 pairs per scene description
     contact_distance_h: float = Field(gt=0)
     facing_min_offset_h: float = Field(ge=0)
+    smooth_points: int = Field(ge=3)
+    max_gap_s: float = Field(gt=0)
 
     def to_feature_config(self) -> FeatureConfig:
         return FeatureConfig(**self.model_dump())
+
+
+class MotionConfig(_Section):
+    max_width: int = Field(gt=0)  # frames are shrunk to at most this width before differencing
+    threshold: float = Field(ge=0)  # a pixel changed if its grey level moved by more than this
 
 
 class ContextConfig(_Section):
@@ -147,6 +154,7 @@ class Config(_Section):
     weapons: WeaponsConfig
     notify: NotifyConfig
     features: FeaturesConfig
+    motion: MotionConfig
     context: ContextConfig
     aggregator_a: AggregatorAConfig
     incidents: IncidentsConfig

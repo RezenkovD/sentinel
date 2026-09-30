@@ -22,10 +22,11 @@ from sentinel.agents.features import (
     facing,
     height,
     holds,
-    limb_accel,
     person_speed,
     plausible,
+    pose_kinematics,
 )
+from sentinel.agents.motion import FrameMotion
 from sentinel.agents.weapons import WeaponBox
 from sentinel.schema import Interaction, Person, SceneDescription, Summary, Window, Zone
 
@@ -39,6 +40,7 @@ class FrameRecord:
     skeletons: dict[int, np.ndarray]
     weapons: list[WeaponBox]
     weapon_run: bool = True  # the weapon detector ran on this frame (else `weapons` are its kept boxes)
+    motion: FrameMotion | None = None  # pixel motion since the previous analysed frame
 
 
 class SceneBuilder:
@@ -48,6 +50,7 @@ class SceneBuilder:
         self.source = source
         self.zone = zone  # may be reassigned between windows (e.g. day / night)
         self._frames: list[FrameRecord] = []
+        self._context: list[FrameRecord] = []  # last frames of the previous window, for the keypoint fits
         self._window_start: float | None = None
         self._contacts = ContactTracker(cfg.contact_distance_h)
 
@@ -58,6 +61,7 @@ class SceneBuilder:
         skeletons: dict[int, np.ndarray],
         weapons: list[WeaponBox],
         weapon_run: bool = True,
+        motion: FrameMotion | None = None,
     ) -> SceneDescription | None:
         """Add an analysed frame; returns the description of the window this frame closed, if any."""
         scene = None
@@ -66,7 +70,7 @@ class SceneBuilder:
         elif t >= self._window_start + self.window_s - _EPS:
             scene = self._build(self._window_start + self.window_s)
             self._window_start = math.floor(t / self.window_s + _EPS) * self.window_s
-        self._frames.append(FrameRecord(t, tracks, skeletons, weapons, weapon_run))
+        self._frames.append(FrameRecord(t, tracks, skeletons, weapons, weapon_run, motion))
         return scene
 
     def flush(self) -> SceneDescription | None:
@@ -86,17 +90,28 @@ class SceneBuilder:
                     Observation(f.t, tr.box, tr.conf, f.skeletons.get(tr.track_id))
                 )
         heights = {tid: height(obs) for tid, obs in observations.items()}
+        context: dict[int, list[Observation]] = defaultdict(list)
+        for f in self._context:
+            for tr in f.tracks:
+                context[tr.track_id].append(Observation(f.t, tr.box, tr.conf, f.skeletons.get(tr.track_id)))
+        self._context = frames[-(cfg.smooth_points // 2) :]
+        motions = [f.motion for f in frames if f.motion is not None]
 
-        persons = tuple(
-            Person(
+        def person(tid: int, obs: list[Observation]) -> Person:
+            kin = pose_kinematics(context[tid] + obs, heights[tid], cfg, t_min=self._window_start)
+            inside = [m.people[tid] for m in motions if tid in m.people]
+            return Person(
                 id=tid,
                 speed=person_speed(obs, heights[tid]),
-                limb_accel=limb_accel(obs, heights[tid], cfg),
+                limb_speed=kin.limb_speed,
+                limb_accel=kin.limb_accel,
+                pose_motion=kin.pose_motion,
+                motion=float(np.mean(inside)) if inside else None,
                 holds=holds(obs, runs, heights[tid], cfg),
                 conf=float(np.mean([o.conf for o in obs])),
             )
-            for tid, obs in sorted(observations.items())
-        )
+
+        persons = tuple(person(tid, obs) for tid, obs in sorted(observations.items()))
 
         series = {}
         for a, b in combinations(sorted(observations), 2):
@@ -129,6 +144,8 @@ class SceneBuilder:
         summary = Summary(
             n_persons=len(persons),
             crowd_motion=crowd_motion,
+            motion_energy=float(np.mean([m.energy for m in motions])) if motions else None,
+            motion_area=float(np.mean([m.area for m in motions])) if motions else None,
             weapon_visible=any(self._weapon_in_view(f) for f in frames),
         )
         window = Window(t_start=self._window_start, t_end=t_end, source=self.source)

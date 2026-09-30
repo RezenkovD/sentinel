@@ -29,6 +29,8 @@ class FeatureConfig:
     max_pairs: int
     contact_distance_h: float  # a pair closer than this is "in contact"
     facing_min_offset_h: float  # nose-to-shoulder-midpoint horizontal offset that shows a direction
+    smooth_points: int = 5  # keypoint trajectories: local least-squares fits over this many points…
+    max_gap_s: float = 0.3  # …never across a gap longer than this (no interpolation)
 
 
 @dataclass(frozen=True, eq=False)
@@ -64,20 +66,6 @@ def _point(o: Observation, index: int, cfg: FeatureConfig) -> np.ndarray | None:
     if o.keypoints is None or o.keypoints[index, 2] < cfg.min_keypoint_conf:
         return None
     return o.keypoints[index, :2]
-
-
-def limb_accel(obs: Sequence[Observation], h: float, cfg: FeatureConfig) -> float | None:
-    """Largest wrist acceleration, heights/s², from differences over three consecutive confident points."""
-    best = None
-    for wrist in (LEFT_WRIST, RIGHT_WRIST):
-        track = [(o.t, p) for o in obs if (p := _point(o, wrist, cfg)) is not None]
-        for (t1, p1), (t2, p2), (t3, p3) in zip(track, track[1:], track[2:], strict=False):
-            if not (t1 < t2 < t3):
-                continue
-            accel = 2 * ((p3 - p2) / (t3 - t2) - (p2 - p1) / (t2 - t1)) / (t3 - t1)
-            value = float(np.linalg.norm(accel)) / h
-            best = value if best is None else max(best, value)
-    return best
 
 
 def plausible(weapon: WeaponBox, h: float, cfg: FeatureConfig) -> bool:
@@ -117,6 +105,90 @@ def holds(
     if not held:
         return None
     return max(held, key=lambda k: (counts[k], k == "gun"))
+
+
+@dataclass(frozen=True)
+class Kinematics:
+    """Smoothed keypoint motion relative to the torso over one window (schema v3)."""
+
+    limb_speed: float | None  # p90 speed of the wrists relative to the shoulder midpoint, heights/s
+    limb_accel: float | None  # largest wrist acceleration relative to the shoulder midpoint, heights/s²
+    pose_motion: (
+        float | None
+    )  # mean speed of confident keypoints relative to the shoulder midpoint, heights/s
+
+
+def _relative_series(
+    obs: Sequence[Observation], index: int, cfg: FeatureConfig
+) -> list[tuple[float, np.ndarray]]:
+    """(t, keypoint - shoulder midpoint) in the frames where the keypoint and both shoulders are confident.
+
+    The shoulder midpoint is the torso reference: hips are often hidden, and a reference whose points come and
+    go from frame to frame would jump and fake motion.
+    """
+    series = []
+    for o in obs:
+        p, left, right = _point(o, index, cfg), _point(o, LEFT_SHOULDER, cfg), _point(o, RIGHT_SHOULDER, cfg)
+        if p is not None and left is not None and right is not None:
+            series.append((o.t, p - (left + right) / 2))
+    return series
+
+
+def _derivatives(
+    series: list[tuple[float, np.ndarray]], cfg: FeatureConfig
+) -> list[tuple[float, np.ndarray | None, np.ndarray | None]]:
+    """(t, velocity, acceleration) at every point from local least-squares fits over up to smooth_points
+    neighbours (a line for the velocity from 3 points, a parabola for the acceleration from 4), using the real
+    time stamps and never reaching across a gap longer than max_gap_s."""
+    half = cfg.smooth_points // 2
+    segments: list[list[tuple[float, np.ndarray]]] = []
+    for t, p in series:
+        if not segments or t - segments[-1][-1][0] > cfg.max_gap_s:
+            segments.append([])
+        segments[-1].append((t, p))
+    out = []
+    for segment in segments:
+        ts = np.array([t for t, _ in segment])
+        ps = np.array([p for _, p in segment])
+        for j in range(len(segment)):
+            lo, hi = max(0, j - half), min(len(segment), j + half + 1)
+            dt = ts[lo:hi] - ts[j]
+            velocity = acceleration = None
+            if hi - lo >= 3:
+                velocity = np.linalg.lstsq(np.vander(dt, 2, increasing=True), ps[lo:hi], rcond=None)[0][1]
+            if hi - lo >= 4:
+                acceleration = (
+                    2 * np.linalg.lstsq(np.vander(dt, 3, increasing=True), ps[lo:hi], rcond=None)[0][2]
+                )
+            out.append((ts[j], velocity, acceleration))
+    return out
+
+
+def pose_kinematics(obs: Sequence[Observation], h: float, cfg: FeatureConfig, t_min: float) -> Kinematics:
+    """Limb and body motion relative to the shoulders, summarised over the points at or after `t_min`.
+
+    `obs` may start before the window (`t_min`): earlier points only help the fits at the window's start.
+    Relative motion tells a fight (fists move around the torso) from running (the whole body moves).
+    """
+    wrist_speeds, wrist_accels, speeds = [], [], []
+    for index in range(17):
+        if index in (LEFT_SHOULDER, RIGHT_SHOULDER):
+            continue
+        for t, velocity, acceleration in _derivatives(_relative_series(obs, index, cfg), cfg):
+            if t < t_min - 1e-9:
+                continue
+            if velocity is not None:
+                speed = float(np.linalg.norm(velocity)) / h
+                speeds.append(speed)
+                if index in (LEFT_WRIST, RIGHT_WRIST):
+                    wrist_speeds.append(speed)
+            if acceleration is not None and index in (LEFT_WRIST, RIGHT_WRIST):
+                wrist_accels.append(float(np.linalg.norm(acceleration)) / h)
+    return Kinematics(
+        limb_speed=float(np.percentile(wrist_speeds, 90)) if wrist_speeds else None,
+        limb_accel=max(wrist_accels) if wrist_accels else None,
+        pose_motion=float(np.mean(speeds)) if speeds else None,
+    )
 
 
 def distance_series(

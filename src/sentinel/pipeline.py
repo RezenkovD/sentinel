@@ -34,6 +34,7 @@ class Agents:
     people: Any  # update(image) -> list[Track]; reset()
     poser: Any  # estimate(image, tracks) -> {track_id: keypoints}
     weapons: Any  # detect(image, people boxes) -> list[WeaponBox]; reset()
+    motion: Any = None  # update(image, tracks) -> FrameMotion | None; reset() — pixel motion (schema v3)
 
 
 @dataclass
@@ -91,6 +92,8 @@ class Pipeline:
         """Start a new stream (e.g. the next clip): fresh tracks, windows and incident state."""
         self.agents.people.reset()
         self.agents.weapons.reset()
+        if self.agents.motion is not None:
+            self.agents.motion.reset()
         cfg = self.config
         self.builder = SceneBuilder(
             cfg.features.to_feature_config(), cfg.analysis.window_s, self.source_id, self.zone
@@ -114,7 +117,8 @@ class Pipeline:
         weapon_run = getattr(self.agents.weapons, "ran", True)
         timing["weapons"] = _ms_since(started)
         started = time.perf_counter()
-        scene = self.builder.add(frame.t, tracks, skeletons, weapons, weapon_run)
+        motion = None if self.agents.motion is None else self.agents.motion.update(frame.image, tracks)
+        scene = self.builder.add(frame.t, tracks, skeletons, weapons, weapon_run, motion)
         timing["scene"] = _ms_since(started)
         events = []
         started = time.perf_counter()
@@ -233,6 +237,7 @@ def build_pipeline(
     config: Config, source_id: str, run_id: str, journal: Path | None, notifier: Notifier
 ) -> Pipeline:
     """The real pipeline: YOLO people + ByteTrack, YOLO-pose, weapon detector, aggregator A, key frames."""
+    from sentinel.agents.motion import PixelMotion
     from sentinel.agents.weapons import WeaponDetector
     from sentinel.aggregators.rules import RulesAggregator
     from sentinel.keyframe import KeyframeWriter
@@ -246,6 +251,7 @@ def build_pipeline(
         weapons=WeaponDetector.from_weights(
             files["weapons"], w.imgsz, w.conf, w.every_n_frames, w.class_map, w.mode, w.crop_pad, device
         ),
+        motion=PixelMotion(config.motion.max_width, config.motion.threshold),
     )
     keyframes = KeyframeWriter(config.incidents.output_dir, config.incidents.blur_faces)
     aggregator = RulesAggregator.from_config(config)

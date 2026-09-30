@@ -39,9 +39,24 @@ def _scene(
 
 
 def _person(
-    pid: int, speed: float | None = 0.3, accel: float | None = 2.0, holds: str | None = None
+    pid: int,
+    speed: float | None = 0.3,
+    accel: float | None = 2.0,
+    holds: str | None = None,
+    limb_speed: float | None = None,
+    pose_motion: float | None = None,
+    motion: float | None = None,
 ) -> Person:
-    return Person(id=pid, speed=speed, limb_accel=accel, holds=holds, conf=0.8)
+    return Person(
+        id=pid,
+        speed=speed,
+        limb_speed=limb_speed,
+        limb_accel=accel,
+        pose_motion=pose_motion,
+        motion=motion,
+        holds=holds,
+        conf=0.8,
+    )
 
 
 def _pair(d: float = 1.5, approach: float | None = 0.0, facing: bool | None = False, contact: float = 0.0):
@@ -54,7 +69,13 @@ def test_feature_order_is_fixed():
         "n_persons",
         "crowd_motion",
         "max_speed",
+        "pair_max_speed",
+        "max_limb_speed",
         "max_limb_accel",
+        "max_pose_motion",
+        "max_person_motion",
+        "motion_energy",
+        "motion_area",
         "min_distance_h",
         "max_approach_speed",
         "facing_close",
@@ -82,6 +103,32 @@ def test_features_are_read_from_the_scene_by_name():
     assert x["min_distance_h"] == pytest.approx(0.5) and x["max_approach_speed"] == pytest.approx(0.8)
     assert (x["facing_close"], x["max_contact_s"], x["n_close_pairs"]) == (1.0, pytest.approx(3.0), 1.0)
     assert (x["weapon_visible"], x["weapon_held"], x["limb_accel_missing"]) == (1.0, 1.0, 0.0)
+
+
+def test_v3_motion_features_are_read_from_the_scene():
+    persons = [
+        _person(1, speed=2.5, limb_speed=0.4, pose_motion=0.2, motion=6.0),  # far from everyone
+        _person(2, speed=0.9, limb_speed=2.1, pose_motion=0.8, motion=25.0),
+        _person(3, speed=0.3, limb_speed=None, pose_motion=None, motion=None),
+    ]
+    pair = Interaction(pair=(2, 3), distance_h=0.6, approach_speed=0.5, facing=True, duration_s=1.0)
+    scene = _scene(persons=persons, interactions=[pair])
+    scene = scene.model_copy(
+        update={"summary": scene.summary.model_copy(update={"motion_energy": 7.5, "motion_area": 3.2})}
+    )
+    x = dict(zip(FEATURE_NAMES, scene_to_features(scene, CONFIG), strict=True))
+    assert x["max_speed"] == pytest.approx(2.5)
+    assert x["pair_max_speed"] == pytest.approx(0.9)  # the fastest person who has someone close
+    assert x["max_limb_speed"] == pytest.approx(2.1) and x["max_pose_motion"] == pytest.approx(0.8)
+    assert x["max_person_motion"] == pytest.approx(25.0)
+    assert (x["motion_energy"], x["motion_area"]) == (pytest.approx(7.5), pytest.approx(3.2))
+
+
+def test_a_lone_runner_has_no_pair_speed():
+    scene = _scene(persons=[_person(1, speed=3.0)])
+    x = dict(zip(FEATURE_NAMES, scene_to_features(scene, CONFIG), strict=True))
+    assert x["max_speed"] == pytest.approx(3.0)
+    assert x["pair_max_speed"] == CONFIG.aggregator_a.neutral["pair_max_speed"]
 
 
 def test_missing_feature_becomes_neutral_value_with_an_indicator():

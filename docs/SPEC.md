@@ -97,12 +97,13 @@ flowchart LR
 
 ```json
 {
+  "schema_version": 3,
   "window": {"t_start": 132.0, "t_end": 133.0, "source": "cam-1"},
   "zone": {"type": "transport_stop", "hours": "night", "expected_density": "low"},
-  "summary": {"n_persons": 3, "crowd_motion": 0.42, "weapon_visible": false},
+  "summary": {"n_persons": 3, "crowd_motion": 0.42, "motion_energy": 6.3, "motion_area": 4.1, "weapon_visible": false},
   "persons": [
-    {"id": 7, "speed": 0.8, "limb_accel": 3.1, "holds": null, "conf": 0.91},
-    {"id": 9, "speed": 1.4, "limb_accel": 0.6, "holds": "knife", "conf": 0.64}
+    {"id": 7, "speed": 0.8, "limb_speed": 1.9, "limb_accel": 14.2, "pose_motion": 0.7, "motion": 18.5, "holds": null, "conf": 0.91},
+    {"id": 9, "speed": 1.4, "limb_speed": 0.6, "limb_accel": 3.1, "pose_motion": 0.3, "motion": 9.2, "holds": "knife", "conf": 0.64}
   ],
   "interactions": [
     {"pair": [7, 9], "distance_h": 0.45, "approach_speed": 1.2, "facing": true, "duration_s": 4.0}
@@ -116,7 +117,8 @@ flowchart LR
 - значення округлюються до 2 знаків — це робить кеш LLM дієвим і промпт коротким;
 - у `interactions` лише пари ближчі за 2 зрости, до 5 пар з найменшою відстанню;
 - порожня сцена (нікого немає) теж валідний опис із `n_persons: 0` — агрегатори повертають нульовий ризик без виклику LLM;
-- схема має версію (`schema_version`); зміна полів = нова версія, щоб старі результати експерименту лишалися відтворюваними.
+- схема має версію (`schema_version`); зміна полів = нова версія, щоб старі результати експерименту лишалися відтворюваними;
+- v3 (30.09): рух кінцівок і тіла — відносно середини плечей, по згладжених траєкторіях ключових точок (`limb_speed`, `limb_accel`, `pose_motion`, зрости/с і зрости/с²); рух у пікселях, незалежний від детекції людей (`motion_energy` — середня абсолютна різниця сусідніх кадрів аналізу в рівнях сірого, `motion_area` — % пікселів зі зміною понад поріг, `motion` особи — різниця в її рамці).
 
 ## 6. Реальний час
 

@@ -104,7 +104,7 @@ def test_journal_line_holds_scene_risk_state_frame_age_and_timing(tmp_path: Path
     _, _, journal = _run(tmp_path)
     assert [e["kind"] for e in journal[4]["events"]] == ["open"]  # windows [2,3), [3,4), [4,5) are 3 of 5
     line = journal[5]
-    assert line["scene"]["schema_version"] == 2 and line["scene"]["summary"]["n_persons"] == 2
+    assert line["scene"]["schema_version"] == 3 and line["scene"]["summary"]["n_persons"] == 2
     assert line["risk"]["risk"] == 0.9 and line["state"] == "тривога"
     assert line["frame_age_s"] == 0.05
     assert set(line["timing_ms"]) >= {"people", "pose", "weapons", "scene", "decision", "frames"}

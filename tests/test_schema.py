@@ -14,15 +14,39 @@ from sentinel.schema import (
     Zone,
 )
 
-# The example from SPEC, section 5 (plus the schema version the contract requires).
+# The example from SPEC, section 5 (schema v3).
 SPEC_EXAMPLE = {
-    "schema_version": 2,
+    "schema_version": 3,
     "window": {"t_start": 132.0, "t_end": 133.0, "source": "cam-1"},
     "zone": {"type": "transport_stop", "hours": "night", "expected_density": "low"},
-    "summary": {"n_persons": 3, "crowd_motion": 0.42, "weapon_visible": False},
+    "summary": {
+        "n_persons": 3,
+        "crowd_motion": 0.42,
+        "motion_energy": 6.3,
+        "motion_area": 4.1,
+        "weapon_visible": False,
+    },
     "persons": [
-        {"id": 7, "speed": 0.8, "limb_accel": 3.1, "holds": None, "conf": 0.91},
-        {"id": 9, "speed": 1.4, "limb_accel": 0.6, "holds": "knife", "conf": 0.64},
+        {
+            "id": 7,
+            "speed": 0.8,
+            "limb_speed": 1.9,
+            "limb_accel": 14.2,
+            "pose_motion": 0.7,
+            "motion": 18.5,
+            "holds": None,
+            "conf": 0.91,
+        },
+        {
+            "id": 9,
+            "speed": 1.4,
+            "limb_speed": 0.6,
+            "limb_accel": 3.1,
+            "pose_motion": 0.3,
+            "motion": 9.2,
+            "holds": "knife",
+            "conf": 0.64,
+        },
     ],
     "interactions": [
         {"pair": [7, 9], "distance_h": 0.45, "approach_speed": 1.2, "facing": True, "duration_s": 4.0}
@@ -40,19 +64,27 @@ def test_spec_example_round_trips_through_json_unchanged():
     assert json.loads(scene.model_dump_json()) == SPEC_EXAMPLE
 
 
-def test_serialized_scene_carries_schema_version_2():
+def test_serialized_scene_carries_schema_version_3():
     scene = SceneDescription(
         window=Window(t_start=0.0, t_end=1.0, source="cam-1"),
         zone=Zone(type="street", hours="day", expected_density="high"),
         summary=Summary(n_persons=0, crowd_motion=0.0, weapon_visible=False),
     )
-    assert SCHEMA_VERSION == 2
-    assert json.loads(scene.model_dump_json())["schema_version"] == 2
+    assert SCHEMA_VERSION == 3
+    assert json.loads(scene.model_dump_json())["schema_version"] == 3
 
 
-def test_scene_with_other_schema_version_is_rejected():
+@pytest.mark.parametrize("old", [1, 2])
+def test_scene_with_other_schema_version_is_rejected(old: int):
     with pytest.raises(ValidationError):
-        _scene(schema_version=1)  # v1 had no nulls; old descriptions are not silently reinterpreted
+        _scene(schema_version=old)  # old descriptions are not silently reinterpreted
+
+
+def test_v3_motion_features_are_null_when_they_could_not_be_computed():
+    person = Person(id=3, speed=0.5, limb_accel=None, holds=None, conf=0.7)  # no skeleton, first frame
+    summary = Summary(n_persons=1, crowd_motion=0.5, weapon_visible=False)
+    assert (person.limb_speed, person.pose_motion, person.motion) == (None, None, None)
+    assert (summary.motion_energy, summary.motion_area) == (None, None)
 
 
 def test_floats_are_rounded_to_two_decimals():
@@ -67,7 +99,10 @@ def test_floats_are_rounded_to_two_decimals():
 
 def test_rounded_json_text_is_short():
     person = Person(id=1, speed=0.123456789, limb_accel=2.0 / 3.0, holds=None, conf=0.87654321)
-    assert person.model_dump_json() == '{"id":1,"speed":0.12,"limb_accel":0.67,"holds":null,"conf":0.88}'
+    assert person.model_dump_json() == (
+        '{"id":1,"speed":0.12,"limb_speed":null,"limb_accel":0.67,"pose_motion":null,"motion":null,'
+        '"holds":null,"conf":0.88}'
+    )
 
 
 def test_tiny_negative_value_serializes_as_plain_zero():

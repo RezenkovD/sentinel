@@ -9,7 +9,6 @@ from sentinel.agents.features import (
     distance_series,
     facing,
     holds,
-    limb_accel,
     person_speed,
 )
 from sentinel.agents.weapons import WeaponBox
@@ -49,29 +48,8 @@ def _wrist_track(times, xs, confs=None) -> list[Observation]:
     ]
 
 
-def test_strike_gives_a_sharp_wrist_acceleration():
-    # wrist moves 10 px per 0.1 s, then stops dead: a = 2 (0 - 100 px/s) / 0.2 s = -1000 px/s² = 10 heights/s²
-    assert limb_accel(_wrist_track([0.0, 0.1, 0.2], [0.0, 10.0, 10.0]), H, CFG) == pytest.approx(10.0)
-
-
-def test_steady_wrist_motion_has_no_acceleration():
-    assert limb_accel(_wrist_track([0.0, 0.1, 0.2], [0.0, 10.0, 20.0]), H, CFG) == pytest.approx(0.0)
-
-
-def test_acceleration_uses_real_time_stamps_not_the_nominal_rate():
-    # equal steps but uneven time: v1 = 100 px/s, v2 = 50 px/s, a = 2 (50 - 100) / 0.3 = -333 px/s²
-    track = _wrist_track([0.0, 0.1, 0.3], [0.0, 10.0, 20.0])
-    assert limb_accel(track, H, CFG) == pytest.approx(3.333, abs=1e-3)
-
-
-def test_unconfident_wrist_points_are_not_used():
-    track = _wrist_track([0.0, 0.1, 0.2], [0.0, 10.0, 10.0], confs=[0.9, 0.2, 0.9])
-    assert limb_accel(track, H, CFG) is None
-
-
-def test_person_without_skeleton_has_null_limb_features_but_a_speed():
+def test_person_without_skeleton_still_has_a_speed():
     track = [_obs(0.0, 0.0), _obs(0.1, 10.0), _obs(0.2, 20.0)]  # box centre moves 100 px/s
-    assert limb_accel(track, H, CFG) is None
     assert person_speed(track, H) == pytest.approx(1.0)
 
 

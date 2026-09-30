@@ -8,13 +8,18 @@ SCHEMA_VERSION so that old experiment results stay reproducible.
 v2 (29.09): a feature that cannot be computed (no skeleton, a track seen in one frame only, no nose or
 shoulder points for a pair) is null instead of an invented value — speed, limb_accel, approach_speed,
 facing, crowd_motion; `holds` is "gun" / "knife" (was "pistol" / "knife").
+
+v3 (30.09): keypoint trajectories are smoothed and measured relative to the shoulders — limb_speed (p90
+wrist speed), limb_accel (now smoothed and relative), pose_motion (mean keypoint speed) — and pixel motion
+that does not depend on person detection: motion_energy / motion_area per window (mean |frame difference|
+in grey levels, % of pixels changed) and motion inside each person's box. New fields default to null.
 """
 
 from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 WeaponType = Literal["gun", "knife"]  # v2: pistols and rifles are both "gun"
 AlertLevel = Literal["normal", "attention", "alarm"]
@@ -49,13 +54,22 @@ class Zone(_Contract):
 class Summary(_Contract):
     n_persons: int = Field(ge=0)
     crowd_motion: NonNegative | None  # mean person speed; null if nobody's speed is known
+    motion_energy: NonNegative | None = (
+        None  # mean |frame difference|, grey levels; null without a previous frame
+    )
+    motion_area: NonNegative | None = None  # % of pixels changed by more than the threshold
     weapon_visible: bool
 
 
 class Person(_Contract):
     id: int
     speed: NonNegative | None  # heights/s; null if the track was seen in a single frame of the window
-    limb_accel: NonNegative | None  # heights/s²; null without three confident wrist points
+    limb_speed: NonNegative | None = None  # heights/s, p90 wrist speed relative to the shoulders
+    limb_accel: (
+        NonNegative | None
+    )  # heights/s², largest smoothed wrist acceleration relative to the shoulders
+    pose_motion: NonNegative | None = None  # heights/s, mean keypoint speed relative to the shoulders
+    motion: NonNegative | None = None  # mean |frame difference| inside the person's box, grey levels
     holds: WeaponType | None
     conf: Probability
 
@@ -69,7 +83,7 @@ class Interaction(_Contract):
 
 
 class SceneDescription(_Contract):
-    schema_version: Literal[2] = SCHEMA_VERSION
+    schema_version: Literal[3] = SCHEMA_VERSION
     window: Window
     zone: Zone
     summary: Summary
@@ -81,7 +95,7 @@ class SceneDescription(_Contract):
 class RiskResult(_Contract):
     """Output of an aggregator; for B it is exactly the strict JSON `{risk, level, reason_uk}`."""
 
-    schema_version: Literal[2] = SCHEMA_VERSION
+    schema_version: Literal[3] = SCHEMA_VERSION
     risk: Probability
     level: AlertLevel
     reason_uk: str

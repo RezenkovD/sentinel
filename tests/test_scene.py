@@ -6,6 +6,7 @@ import pytest
 from sentinel.agents.context import ZoneContext, ZoneProfile
 from sentinel.agents.detector import Track
 from sentinel.agents.features import FeatureConfig
+from sentinel.agents.motion import FrameMotion
 from sentinel.agents.weapons import WeaponBox
 from sentinel.scene import SceneBuilder
 from sentinel.schema import Zone
@@ -43,6 +44,51 @@ def _run(builder: SceneBuilder, frames: list[tuple]) -> list:
 
 def _builder() -> SceneBuilder:
     return SceneBuilder(CFG, window_s=1.0, source="cam-1", zone=ZONE)
+
+
+def _upper_body(wrist_dx: float) -> np.ndarray:
+    k = np.zeros((17, 3))
+    k[5], k[6] = (10.0, 30.0, 0.9), (30.0, 30.0, 0.9)  # shoulders
+    k[10] = (20.0 + wrist_dx, 50.0, 0.9)  # right wrist, relative to the shoulder midpoint
+    return k
+
+
+def test_limb_motion_is_measured_relative_to_the_torso():
+    frames = [
+        (round(0.1 * i, 1), [_track(1, 0.0)], {1: _upper_body(40.0 if i in (4, 5) else 0.0)}, [])
+        for i in range(10)
+    ]
+    person = _run(_builder(), frames)[0].persons[0]
+    assert person.limb_speed > 1.0 and person.limb_accel > 10.0 and person.pose_motion > 0.0
+
+
+def test_the_last_frames_of_the_previous_window_help_smooth_the_next_one():
+    # the arm moves just before the window boundary; the next window sees it through its first fits
+    frames = [
+        (round(0.1 * i, 1), [_track(1, 0.0)], {1: _upper_body(60.0 if i >= 9 else 0.0)}, [])
+        for i in range(20)
+    ]
+    first, second = _run(_builder(), frames)
+    assert second.persons[0].limb_accel > 5.0  # the fit at the first frame reaches back to the move
+
+
+def test_pixel_motion_is_averaged_over_the_window():
+    frames = []
+    for i in range(10):
+        motion = (
+            None if i == 0 else FrameMotion(energy=4.0 + (i % 2) * 2, area=1.0, people={1: 10.0 * (i % 2)})
+        )
+        frames.append((round(0.1 * i, 1), [_track(1, 0.0)], {}, [], True, motion))
+    scene = _run(_builder(), frames)[0]
+    assert scene.summary.motion_energy == pytest.approx(5.0, abs=0.12)  # 9 frames with a previous one
+    assert scene.summary.motion_area == pytest.approx(1.0)
+    assert scene.persons[0].motion == pytest.approx(5.0, abs=0.6)
+
+
+def test_without_pixel_motion_the_features_are_null():
+    frames = [(round(0.1 * i, 1), [_track(1, 0.0)], {}, []) for i in range(10)]
+    scene = _run(_builder(), frames)[0]
+    assert scene.summary.motion_energy is None and scene.persons[0].motion is None
 
 
 def test_one_description_per_window_with_window_bounds():
