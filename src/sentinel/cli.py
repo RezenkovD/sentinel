@@ -19,6 +19,7 @@ EVAL_COMMANDS = {
     "train-a": ("train_a", True),
     "weapon-rule": ("weapon_rule", False),
     "baselines": ("baselines", False),
+    "weapon-finetune": ("weapon_finetune", False),
 }
 
 
