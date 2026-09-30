@@ -15,6 +15,7 @@ EVAL_COMMANDS = {
     "people": ("people", True),
     "extract": ("extract", True),
     "xd-subset": ("xd_subset", False),
+    "feature-auc": ("feature_auc", True),
 }
 
 

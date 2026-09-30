@@ -226,3 +226,9 @@ def test_wrist_acceleration_at_pose_noise_level_is_not_given_as_a_reason():
     # ~10 heights/s² is what pose jitter alone produces at 10 fps (sanity check, 29.09)
     scene = _scene(persons=[_person(1, speed=0.1, accel=10.0), _person(2, speed=0.1, accel=10.0)])
     assert "різкі рухи рук" not in _aggregator().assess(scene).reason_uk.lower()
+
+
+def test_every_feature_has_a_ukrainian_name():
+    from sentinel.aggregators.rules import FEATURE_NAMES_UK
+
+    assert set(FEATURE_NAMES_UK) == set(FEATURE_NAMES)

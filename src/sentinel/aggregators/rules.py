@@ -38,6 +38,27 @@ FEATURE_NAMES = (
     "zone_prior",
     "limb_accel_missing",
 )
+FEATURE_NAMES_UK = {  # for tables in reports and the thesis
+    "n_persons": "кількість людей",
+    "crowd_motion": "середня швидкість людей",
+    "max_speed": "найбільша швидкість людини",
+    "pair_max_speed": "найбільша швидкість людини, що має пару",
+    "max_limb_speed": "швидкість рук відносно тулуба",
+    "max_limb_accel": "прискорення рук відносно тулуба",
+    "max_pose_motion": "рух тіла відносно тулуба",
+    "max_person_motion": "рух пікселів у рамці людини",
+    "motion_energy": "енергія руху в кадрі",
+    "motion_area": "частка кадру з рухом",
+    "min_distance_h": "найменша відстань між людьми",
+    "max_approach_speed": "швидкість зближення",
+    "facing_close": "обличчям одне до одного впритул",
+    "max_contact_s": "тривалість близького контакту",
+    "n_close_pairs": "кількість пар упритул",
+    "weapon_visible": "зброя в кадрі",
+    "weapon_held": "зброя в руці",
+    "zone_prior": "апріорний ризик зони",
+    "limb_accel_missing": "немає даних про руки",
+}
 _WEAPON_UK = {"gun": "вогнепальна зброя", "knife": "ніж"}
 _REASON_GROUP = {  # one phrase per group in an explanation
     "crowd_motion": "motion",
