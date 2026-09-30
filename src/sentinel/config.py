@@ -109,6 +109,7 @@ class ZonePriorConfig(_Section):
 
 
 class AggregatorAConfig(_Section):
+    model: Path | None = None  # trained A (sentinel eval train-a); null = the hand-set weights below
     bias: float
     clip: float = Field(gt=0)
     reason_min_contribution: float = Field(ge=0)

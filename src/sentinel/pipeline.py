@@ -322,12 +322,12 @@ def build_pipeline(
     config: Config, source_id: str, run_id: str, journal: Path | None, notifier: Notifier
 ) -> Pipeline:
     """The real pipeline: YOLO people + ByteTrack, YOLO-pose, weapon detector, aggregator A, key frames."""
-    from sentinel.aggregators.rules import RulesAggregator
+    from sentinel.aggregators.rules import make_aggregator
     from sentinel.keyframe import KeyframeWriter
 
     agents = build_agents(config)
     keyframes = KeyframeWriter(config.incidents.output_dir, config.incidents.blur_faces)
-    aggregator = RulesAggregator.from_config(config)
+    aggregator = make_aggregator(config)
     return Pipeline(agents, aggregator, notifier, config, source_id, run_id, journal, keyframes)
 
 

@@ -16,6 +16,7 @@ EVAL_COMMANDS = {
     "extract": ("extract", True),
     "xd-subset": ("xd_subset", False),
     "feature-auc": ("feature_auc", True),
+    "train-a": ("train_a", True),
 }
 
 

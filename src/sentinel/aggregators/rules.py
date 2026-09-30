@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 
 from sentinel.config import Config
-from sentinel.schema import RiskResult, SceneDescription
+from sentinel.schema import SCHEMA_VERSION, RiskResult, SceneDescription
 
 FEATURE_NAMES = (
     "n_persons",
@@ -159,6 +159,12 @@ def _reason(name: str, x: dict[str, float], scene: SceneDescription) -> str | No
     return None
 
 
+def make_aggregator(config: Config) -> "RulesAggregator":
+    """The trained A named in the config, or the hand-set weights when none is set."""
+    model = config.aggregator_a.model
+    return RulesAggregator.from_config(config) if model is None else RulesAggregator.load(model, config)
+
+
 class RulesAggregator:
     def __init__(
         self,
@@ -239,7 +245,8 @@ class RulesAggregator:
             np.array([self.config.aggregator_a.neutral[n] for n in FEATURE_NAMES])
         )
 
-    def save(self, path: Path) -> None:
+    def save(self, path: Path, extra: dict | None = None) -> None:
+        """Weights with the feature list and schema version; `extra` adds metadata (training, thresholds)."""
         data = {
             "features": list(FEATURE_NAMES),
             "weights": self.weights.tolist(),
@@ -247,14 +254,27 @@ class RulesAggregator:
             "mean": self.mean.tolist(),
             "scale": self.scale.tolist(),
             "clip": self.clip,
-        }
-        Path(path).write_text(json.dumps(data, indent=1), encoding="utf-8")
+            "schema_version": SCHEMA_VERSION,
+        } | (extra or {})
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        Path(path).write_text(json.dumps(data, indent=1, ensure_ascii=False), encoding="utf-8")
 
     @classmethod
     def load(cls, path: Path, config: Config) -> "RulesAggregator":
+        """Load saved weights; refuse ones made for other features, another schema or another perception."""
+        from sentinel.pipeline import PERCEPTION_VERSION
+
         data = json.loads(Path(path).read_text(encoding="utf-8"))
         if tuple(data["features"]) != FEATURE_NAMES:
             raise ValueError(f"{path} was saved for features {data['features']}, expected {FEATURE_NAMES}")
+        if data.get("schema_version", SCHEMA_VERSION) != SCHEMA_VERSION:
+            raise ValueError(
+                f"{path} was trained on schema v{data['schema_version']}, this is v{SCHEMA_VERSION}"
+            )
+        if data.get("perception_version", PERCEPTION_VERSION) != PERCEPTION_VERSION:
+            raise ValueError(
+                f"{path} was trained on perception {data['perception_version']}, this is {PERCEPTION_VERSION}"
+            )
         arrays = {k: np.array(data[k], dtype=float) for k in ("weights", "mean", "scale")}
         return cls(
             arrays["weights"], float(data["bias"]), arrays["mean"], arrays["scale"], data["clip"], config

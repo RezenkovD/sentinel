@@ -232,3 +232,18 @@ def test_every_feature_has_a_ukrainian_name():
     from sentinel.aggregators.rules import FEATURE_NAMES_UK
 
     assert set(FEATURE_NAMES_UK) == set(FEATURE_NAMES)
+
+
+def test_config_chooses_a_trained_model_or_the_hand_weights(tmp_path: Path):
+    from sentinel.aggregators.rules import make_aggregator
+
+    trained = RulesAggregator.from_config(CONFIG)
+    trained.weights = trained.weights * 2
+    path = tmp_path / "a.json"
+    trained.save(path, extra={"perception_version": "3.0"})
+    config = CONFIG.model_copy(
+        update={"aggregator_a": CONFIG.aggregator_a.model_copy(update={"model": path})}
+    )
+    assert np.allclose(make_aggregator(config).weights, trained.weights)
+    hand = CONFIG.model_copy(update={"aggregator_a": CONFIG.aggregator_a.model_copy(update={"model": None})})
+    assert np.allclose(make_aggregator(hand).weights, _aggregator().weights)
