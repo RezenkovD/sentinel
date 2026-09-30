@@ -153,3 +153,16 @@ def test_an_interrupted_episode_leaves_no_file_behind(tmp_path: Path):
             _episode(tmp_path), Broken(), out, {"perception_version": "3.0", "perception_hash": "x"}
         )
     assert not out.exists() and list(tmp_path.iterdir()) == []
+
+
+def test_weapon_variant_for_a_separate_cache_is_applied_to_the_config():
+    from sentinel.eval.extract import with_weapon_variant
+
+    cfg = with_weapon_variant(CONFIG, "crops320:2", conf=0.40)
+    assert (cfg.weapons.mode, cfg.weapons.imgsz, cfg.weapons.every_n_frames, cfg.weapons.conf) == (
+        "crops",
+        320,
+        2,
+        0.40,
+    )
+    assert perception_hash(cfg) != perception_hash(CONFIG)  # a separate cache, never mixed with the main one
