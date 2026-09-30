@@ -83,19 +83,25 @@ Run = Callable[[np.ndarray, Sequence[tuple[float, float, float, float]]], list[W
 
 
 class WeaponDetector:
-    """Runs `run(frame, people)` every `every_n_frames` frames and returns the last boxes in between."""
+    """Runs `run(frame, people)` every `every_n_frames` frames and returns the last boxes in between.
 
-    def __init__(self, run: Run, every_n_frames: int = 1) -> None:
+    Boxes scoring below `conf` are dropped; `last_max_conf` keeps the best raw score of the last run (the
+    model may run at a lower score to record it, e.g. for the baseline detector on cached episodes).
+    """
+
+    def __init__(self, run: Run, every_n_frames: int = 1, conf: float = 0.0) -> None:
         if every_n_frames < 1:
             raise ValueError(f"every_n_frames must be at least 1, got {every_n_frames}")
         self._run = run
         self.every_n_frames = every_n_frames
+        self.conf = conf
         self.reset()
 
     def reset(self) -> None:
         self._frames_since_run: int | None = None
         self._boxes: list[WeaponBox] = []
         self.ran = False  # the model ran on the last frame given to `detect` (else its boxes were kept)
+        self.last_max_conf = 0.0  # best raw score of the last run, before the `conf` threshold
 
     def detect(
         self, frame: np.ndarray, people: Sequence[tuple[float, float, float, float]] = ()
@@ -103,7 +109,9 @@ class WeaponDetector:
         """Weapon boxes; `people` (person boxes) are needed in the crops mode only."""
         self.ran = self._frames_since_run is None or self._frames_since_run >= self.every_n_frames - 1
         if self.ran:
-            self._boxes = self._run(frame, people)
+            raw = self._run(frame, people)
+            self.last_max_conf = max((b.conf for b in raw), default=0.0)
+            self._boxes = [b for b in raw if b.conf >= self.conf]
             self._frames_since_run = 0
         else:
             self._frames_since_run += 1
@@ -120,15 +128,18 @@ class WeaponDetector:
         mode: str = "frame",
         crop_pad: float = 0.25,
         device: str = "cpu",
+        record_conf: float | None = None,
     ) -> "WeaponDetector":
+        """`record_conf` (lower than `conf`) makes the model score boxes down to it for `last_max_conf`."""
         if not Path(weights).exists():  # Ultralytics would silently download official weights instead
             raise FileNotFoundError(f"weights not found: {weights} (see data/SOURCES.md)")
         from ultralytics import YOLO
 
         model = YOLO(str(weights), task="detect")
+        predict_conf = conf if record_conf is None else min(conf, record_conf)
 
         def predict(image: np.ndarray) -> list[WeaponBox]:
-            result = model.predict(image, imgsz=imgsz, conf=conf, device=device, verbose=False)[0]
+            result = model.predict(image, imgsz=imgsz, conf=predict_conf, device=device, verbose=False)[0]
             boxes = result.boxes
             found = []
             for xyxy, score, cls_id in zip(
@@ -140,7 +151,7 @@ class WeaponDetector:
             return found
 
         if mode == "frame":
-            return cls(lambda frame, people: predict(frame), every_n_frames)
+            return cls(lambda frame, people: predict(frame), every_n_frames, conf)
         if mode == "crops":
-            return cls(crops_run(predict, crop_pad), every_n_frames)
+            return cls(crops_run(predict, crop_pad), every_n_frames, conf)
         raise ValueError(f"unknown weapon detector mode {mode!r} (frame | crops)")

@@ -101,3 +101,18 @@ def test_crop_mode_keeps_one_box_for_a_weapon_seen_from_two_overlapping_crops():
 def test_crop_mode_without_people_finds_nothing():
     run = crops_run(lambda image: [WeaponBox("gun", (0.0, 0.0, 1.0, 1.0), 0.9)], pad=0.25)
     assert run(np.zeros((10, 10, 3), dtype=np.uint8), []) == []
+
+
+def test_boxes_below_the_threshold_are_dropped_but_the_best_raw_score_is_kept():
+    # extraction runs the model at a low score to record the best one for the baseline (aux), while the
+    # scene only gets boxes at or above the configured threshold
+    def model(frame, people=()):
+        return [WeaponBox("gun", (0.0, 0.0, 5.0, 5.0), 0.12), WeaponBox("knife", (6.0, 0.0, 9.0, 5.0), 0.45)]
+
+    detector = WeaponDetector(model, every_n_frames=1, conf=0.3)
+    assert [b.kind for b in detector.detect(FRAME)] == ["knife"]
+    assert detector.last_max_conf == pytest.approx(0.45)
+    detector = WeaponDetector(
+        lambda frame, people=(): [WeaponBox("gun", (0.0, 0.0, 5.0, 5.0), 0.12)], conf=0.3
+    )
+    assert detector.detect(FRAME) == [] and detector.last_max_conf == pytest.approx(0.12)

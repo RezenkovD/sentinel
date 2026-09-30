@@ -67,6 +67,82 @@ class _Window:
         self.last_age_s = age_s
 
 
+@dataclass
+class FrameResult:
+    """What the perception agents found in one frame (kept by the pipeline for key frames and timing)."""
+
+    tracks: list[Track]
+    skeletons: dict[int, np.ndarray]
+    weapons: list[WeaponBox]
+    others: list  # every person the pose model saw (face blurring)
+    timing_ms: dict[str, float]
+
+
+class Perception:
+    """Lower layer: frame -> people, pose, weapons, pixel motion -> one scene description per window.
+
+    Shared by `sentinel run` and the episode cache (`sentinel eval extract`), so both see exactly the same
+    scenes. Next to each scene comes its `aux`: service data outside the scene description that aggregators
+    never see — the frames in the window and the best raw weapon score (for the baseline detector).
+    """
+
+    def __init__(self, agents: Agents, config: Config, source_id: str, zone: Zone) -> None:
+        self.agents, self.config, self.source_id, self.zone = agents, config, source_id, zone
+        self.reset()
+
+    def reset(self) -> None:
+        """Start a new stream: fresh tracks, windows and pixel history."""
+        self.agents.people.reset()
+        self.agents.weapons.reset()
+        if self.agents.motion is not None:
+            self.agents.motion.reset()
+        cfg = self.config
+        self.builder = SceneBuilder(
+            cfg.features.to_feature_config(), cfg.analysis.window_s, self.source_id, self.zone
+        )
+        self._aux = self._new_aux()
+
+    @staticmethod
+    def _new_aux() -> dict:
+        return {"frames": 0, "weapon_max_conf": 0.0}
+
+    def process(self, frame: Frame) -> tuple[SceneDescription | None, dict | None, FrameResult]:
+        """Analyse a frame; returns the scene (and aux) of the window this frame closed, if any."""
+        timing: dict[str, float] = {}
+        started = time.perf_counter()
+        tracks = self.agents.people.update(frame.image)
+        timing["people"] = _ms_since(started)
+        started = time.perf_counter()
+        skeletons = self.agents.poser.estimate(frame.image, tracks)
+        timing["pose"] = _ms_since(started)
+        started = time.perf_counter()
+        weapons = self.agents.weapons.detect(frame.image, [t.box for t in tracks])
+        weapon_run = getattr(self.agents.weapons, "ran", True)
+        timing["weapons"] = _ms_since(started)
+        started = time.perf_counter()
+        motion = None if self.agents.motion is None else self.agents.motion.update(frame.image, tracks)
+        timing["motion"] = _ms_since(started)
+        started = time.perf_counter()
+        scene = self.builder.add(frame.t, tracks, skeletons, weapons, weapon_run, motion)
+        timing["scene"] = _ms_since(started)
+        aux = None
+        if scene is not None:  # this frame opens the next window
+            aux, self._aux = self._aux, self._new_aux()
+        self._aux["frames"] += 1
+        if weapon_run:
+            self._aux["weapon_max_conf"] = max(
+                self._aux["weapon_max_conf"], float(getattr(self.agents.weapons, "last_max_conf", 0.0))
+            )
+        others = getattr(self.agents.poser, "last_people", [])
+        return scene, aux, FrameResult(tracks, skeletons, weapons, others, timing)
+
+    def flush(self) -> tuple[SceneDescription | None, dict | None]:
+        """End of the stream: the last, possibly shorter, window."""
+        scene = self.builder.flush()
+        aux, self._aux = (self._aux, self._new_aux()) if scene is not None else (None, self._aux)
+        return scene, aux
+
+
 class Pipeline:
     def __init__(
         self,
@@ -86,56 +162,35 @@ class Pipeline:
         if self.journal is not None:
             self.journal.parent.mkdir(parents=True, exist_ok=True)
         self.zone = zone or ZoneContext.from_yaml(config.context.zones).zone_for(source_id)
+        self.perception = Perception(agents, config, source_id, self.zone)
         self.reset(run_id)
 
     def reset(self, run_id: str) -> None:
         """Start a new stream (e.g. the next clip): fresh tracks, windows and incident state."""
-        self.agents.people.reset()
-        self.agents.weapons.reset()
-        if self.agents.motion is not None:
-            self.agents.motion.reset()
-        cfg = self.config
-        self.builder = SceneBuilder(
-            cfg.features.to_feature_config(), cfg.analysis.window_s, self.source_id, self.zone
-        )
-        self.incidents = IncidentManager(cfg.incidents, self.source_id, self.keyframes, run_id)
+        self.perception.reset()
+        self.incidents = IncidentManager(self.config.incidents, self.source_id, self.keyframes, run_id)
         self._window = _Window()
         self.windows = 0
         self.last_timing_ms: dict[str, float] = {}
         self._last_t = 0.0
 
     def process(self, frame: Frame, age_s: float | None = None) -> list[IncidentEvent]:
-        timing: dict[str, float] = {}
-        started = time.perf_counter()
-        tracks = self.agents.people.update(frame.image)
-        timing["people"] = _ms_since(started)
-        started = time.perf_counter()
-        skeletons = self.agents.poser.estimate(frame.image, tracks)
-        timing["pose"] = _ms_since(started)
-        started = time.perf_counter()
-        weapons = self.agents.weapons.detect(frame.image, [t.box for t in tracks])
-        weapon_run = getattr(self.agents.weapons, "ran", True)
-        timing["weapons"] = _ms_since(started)
-        started = time.perf_counter()
-        motion = None if self.agents.motion is None else self.agents.motion.update(frame.image, tracks)
-        timing["motion"] = _ms_since(started)
-        started = time.perf_counter()
-        scene = self.builder.add(frame.t, tracks, skeletons, weapons, weapon_run, motion)
-        timing["scene"] = _ms_since(started)
+        scene, _, found = self.perception.process(frame)
         events = []
         started = time.perf_counter()
         if scene is not None:
             events = self._close_window(scene)
             self._window = _Window()  # this frame opens the next window
-        self.last_timing_ms = timing | {"decision": _ms_since(started) if scene is not None else 0.0}
-        others = getattr(self.agents.poser, "last_people", [])
-        self._window.add(frame, tracks, skeletons, weapons, timing, age_s, others)
+        self.last_timing_ms = found.timing_ms | {"decision": _ms_since(started) if scene is not None else 0.0}
+        self._window.add(
+            frame, found.tracks, found.skeletons, found.weapons, found.timing_ms, age_s, found.others
+        )
         self._last_t = frame.t
         return events
 
     def finish(self) -> list[IncidentEvent]:
         """End of the stream: close the last window and any incident still open."""
-        scene = self.builder.flush()
+        scene, _ = self.perception.flush()
         events = self._close_window(scene) if scene is not None else []
         t_end = scene.window.t_end if scene is not None else self._last_t
         closing = self.incidents.finish(t_end)

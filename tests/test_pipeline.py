@@ -209,3 +209,42 @@ def test_a_file_that_ends_is_not_a_failure():
 
     result = drive(ScriptedReader(3, fail=False), RecordingPipeline(), mode="offline")
     assert not result.source_lost and result.error is None and result.frames == 3
+
+
+class LowScoreGun:
+    """Fake weapon detector: a gun with score 0.2 on every run, below the scene threshold."""
+
+    def __init__(self) -> None:
+        self.ran, self.last_max_conf = False, 0.0
+
+    def detect(self, image: np.ndarray, people=()) -> list:
+        self.ran, self.last_max_conf = True, 0.2
+        return []
+
+    def reset(self) -> None:
+        self.ran, self.last_max_conf = False, 0.0
+
+
+class Clock:
+    t = 0.0
+
+
+def test_perception_gives_each_scene_with_its_window_aux():
+    from sentinel.pipeline import Perception
+    from sentinel.schema import Zone
+
+    people = TwoPeople()
+    people.t = 0.0
+    agents = Agents(people=people, poser=NoSkeletons(), weapons=LowScoreGun())
+    perception = Perception(agents, CONFIG, "cam-1", Zone(type="street", hours="day", expected_density="low"))
+    results = []
+    for i in range(25):
+        frame = Frame(image=np.zeros((120, 480, 3), dtype=np.uint8), t=round(0.1 * i, 1), index=i)
+        scene, aux = perception.process(frame)[:2]
+        if scene is not None:
+            results.append((scene, aux))
+    scene, aux = perception.flush()
+    results.append((scene, aux))
+    assert [s.window.t_start for s, _ in results] == [0.0, 1.0, 2.0]
+    assert [a["frames"] for _, a in results] == [10, 10, 5]
+    assert all(a["weapon_max_conf"] == 0.2 for _, a in results)
