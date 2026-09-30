@@ -1,8 +1,10 @@
 """Decision agent: incident finite-state machine with hysteresis (SPEC §7).
 
 NORMAL -> ATTENTION when a window has risk >= theta_high; ATTENTION -> ALARM when k of the last n windows are
-that high, or at once when someone holds a weapon (from any calm state). Entering ALARM opens an incident
-unless it joins the previous one: the same people, or within merge_after_close_s after it closed.
+that high, or at once when the same person holds a weapon in `weapon_confirm_windows` consecutive windows
+(from any calm state; decision 30.09.3: a weapon in a single window is often a false detection). Entering
+ALARM opens an incident unless it joins the previous one: the same people, or within merge_after_close_s after
+it closed.
 ALARM -> COOLDOWN when risk drops below theta_low; COOLDOWN -> NORMAL (close) after quiet_s seconds below
 theta_low without a break; COOLDOWN -> ALARM when risk is high again. More than max_new_per_minute new
 incidents per minute are folded into one summary instead of separate notifications.
@@ -91,6 +93,9 @@ class IncidentManager:
         self._last: Incident | None = None
         self._quiet_since: float | None = None
         self._opens: deque[float] = deque()
+        # (window start, window end, ids holding a weapon) of the last windows, for the weapon confirmation
+        self._holders: deque[tuple[float, float, frozenset[int]]] = deque(maxlen=cfg.weapon_confirm_windows)
+        self._weapon_confirmed_now = False
         self._summary: tuple[str, float, int] | None = None  # id, minute start, suppressed count
         self._count = 0
         self.last_incident_id: str | None = None
@@ -100,7 +105,7 @@ class IncidentManager:
     ) -> list[IncidentEvent]:
         cfg = self.cfg
         r = risk.risk
-        held = any(p.holds for p in scene.persons)
+        held = self._weapon_confirmed(scene)
         high = r >= cfg.theta_high
         self._high.append(high)
         events: list[IncidentEvent] = []
@@ -147,7 +152,7 @@ class IncidentManager:
         self.state = State.ALARM
         self._quiet_since = None
         people = participants(scene)
-        held = any(p.holds for p in scene.persons)
+        held = self._weapon_confirmed_now
         best_risk, best_snapshot = max(self._candidates or [(risk.risk, snapshot)], key=lambda c: c[0])
         self._candidates.clear()
         last = self._last
@@ -235,6 +240,19 @@ class IncidentManager:
         return [self._event("close", incident, t, level="normal", stream_ended=stream_ended)]
 
     # --- helpers ---
+
+    def _weapon_confirmed(self, scene: SceneDescription) -> bool:
+        """The same track holds a weapon in the last `weapon_confirm_windows` consecutive windows."""
+        window = scene.window
+        if self._holders and abs(self._holders[-1][1] - window.t_start) > 0.011:  # a gap (2-decimal times)
+            self._holders.clear()
+        holders = frozenset(p.id for p in scene.persons if p.holds)
+        self._holders.append((window.t_start, window.t_end, holders))
+        confirmed = len(self._holders) == self.cfg.weapon_confirm_windows and bool(
+            frozenset.intersection(*(ids for _, _, ids in self._holders))
+        )
+        self._weapon_confirmed_now = confirmed
+        return confirmed
 
     def _joins(self, last: Incident, people: set[int], t: float) -> bool:
         since_close = t - (last.closed_at or t)

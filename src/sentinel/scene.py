@@ -24,6 +24,7 @@ from sentinel.agents.features import (
     holds,
     limb_accel,
     person_speed,
+    plausible,
 )
 from sentinel.agents.weapons import WeaponBox
 from sentinel.schema import Interaction, Person, SceneDescription, Summary, Window, Zone
@@ -37,6 +38,7 @@ class FrameRecord:
     tracks: list[Track]
     skeletons: dict[int, np.ndarray]
     weapons: list[WeaponBox]
+    weapon_run: bool = True  # the weapon detector ran on this frame (else `weapons` are its kept boxes)
 
 
 class SceneBuilder:
@@ -50,7 +52,12 @@ class SceneBuilder:
         self._contacts = ContactTracker(cfg.contact_distance_h)
 
     def add(
-        self, t: float, tracks: list[Track], skeletons: dict[int, np.ndarray], weapons: list[WeaponBox]
+        self,
+        t: float,
+        tracks: list[Track],
+        skeletons: dict[int, np.ndarray],
+        weapons: list[WeaponBox],
+        weapon_run: bool = True,
     ) -> SceneDescription | None:
         """Add an analysed frame; returns the description of the window this frame closed, if any."""
         scene = None
@@ -59,7 +66,7 @@ class SceneBuilder:
         elif t >= self._window_start + self.window_s - _EPS:
             scene = self._build(self._window_start + self.window_s)
             self._window_start = math.floor(t / self.window_s + _EPS) * self.window_s
-        self._frames.append(FrameRecord(t, tracks, skeletons, weapons))
+        self._frames.append(FrameRecord(t, tracks, skeletons, weapons, weapon_run))
         return scene
 
     def flush(self) -> SceneDescription | None:
@@ -72,9 +79,8 @@ class SceneBuilder:
         frames, self._frames = self._frames, []
         cfg = self.cfg
         observations: dict[int, list[Observation]] = defaultdict(list)
-        weapons_at = {}
+        runs = {f.t: f.weapons for f in frames if f.weapon_run}
         for f in frames:
-            weapons_at[f.t] = f.weapons
             for tr in f.tracks:
                 observations[tr.track_id].append(
                     Observation(f.t, tr.box, tr.conf, f.skeletons.get(tr.track_id))
@@ -86,7 +92,7 @@ class SceneBuilder:
                 id=tid,
                 speed=person_speed(obs, heights[tid]),
                 limb_accel=limb_accel(obs, heights[tid], cfg),
-                holds=holds(obs, weapons_at, heights[tid], cfg),
+                holds=holds(obs, runs, heights[tid], cfg),
                 conf=float(np.mean([o.conf for o in obs])),
             )
             for tid, obs in sorted(observations.items())
@@ -123,9 +129,16 @@ class SceneBuilder:
         summary = Summary(
             n_persons=len(persons),
             crowd_motion=crowd_motion,
-            weapon_visible=any(bool(w) for w in weapons_at.values()),
+            weapon_visible=any(self._weapon_in_view(f) for f in frames),
         )
         window = Window(t_start=self._window_start, t_end=t_end, source=self.source)
         return SceneDescription(
             window=window, zone=self.zone, summary=summary, persons=persons, interactions=interactions
         )
+
+    def _weapon_in_view(self, f: FrameRecord) -> bool:
+        """A plausible weapon box in the frame: not taller than allowed for the tallest person in view."""
+        if not f.tracks:
+            return bool(f.weapons)  # nobody to compare the box with
+        tallest = max(tr.box[3] - tr.box[1] for tr in f.tracks)
+        return any(plausible(w, tallest, self.cfg) for w in f.weapons)

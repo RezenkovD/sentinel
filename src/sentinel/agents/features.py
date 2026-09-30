@@ -5,6 +5,7 @@ height: the median height of the track box over the window (units: heights, heig
 A feature that cannot be computed is None rather than an invented value.
 """
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from itertools import pairwise
@@ -22,7 +23,8 @@ Pair = tuple[int, int]
 class FeatureConfig:
     min_keypoint_conf: float  # keypoints below this score are not used
     hold_margin_h: float  # weapon box expansion for "holds", in heights
-    hold_min_detections: int  # distinct weapon detections in the window with a wrist in the (expanded) box
+    hold_min_share: float  # share of the detector runs (while the person is seen) with a wrist in the box
+    weapon_max_height_h: float  # a taller weapon box (in heights of the person) is implausible
     pair_max_distance_h: float  # only pairs closer than this go into the description
     max_pairs: int
     contact_distance_h: float  # a pair closer than this is "in contact"
@@ -78,29 +80,43 @@ def limb_accel(obs: Sequence[Observation], h: float, cfg: FeatureConfig) -> floa
     return best
 
 
-def holds(
-    obs: Sequence[Observation], weapons_at: dict[float, list[WeaponBox]], h: float, cfg: FeatureConfig
-) -> str | None:
-    """Weapon kind whose (expanded) box contains a wrist in at least hold_min_detections distinct detections.
+def plausible(weapon: WeaponBox, h: float, cfg: FeatureConfig) -> bool:
+    """A weapon box taller than weapon_max_height_h person heights is a false detection (a whole person)."""
+    return weapon.box[3] - weapon.box[1] <= cfg.weapon_max_height_h * h
 
-    Distinct detections, not frames: a detector running every n-th frame keeps its last boxes in between, and
-    one detection must not count as several.
+
+def holds(
+    obs: Sequence[Observation], runs: dict[float, list[WeaponBox]], h: float, cfg: FeatureConfig
+) -> str | None:
+    """Weapon kind with a confident wrist inside its (expanded, plausible) box in enough detector runs.
+
+    `runs` maps the times of the frames where the weapon detector ran to its boxes (boxes kept between runs
+    are not repeated here). A weapon is held if it is at a wrist in at least `hold_min_share` of the runs made
+    while the person was in view, and in at least one: 2 of 5 runs at 10 frames/s with the detector on every
+    2nd frame, 1 of 2 on the 2-frames/s Sevilla sequences.
     """
     margin = cfg.hold_margin_h * h
-    detections: dict[str, set[WeaponBox]] = {}
-    for o in obs:
+    seen = [o for o in obs if o.t in runs]
+    counts: dict[str, int] = {}
+    for o in seen:
         wrists = [p for w in (LEFT_WRIST, RIGHT_WRIST) if (p := _point(o, w, cfg)) is not None]
-        for weapon in weapons_at.get(o.t, []):
-            if any(
+        kinds = {
+            weapon.kind
+            for weapon in runs[o.t]
+            if plausible(weapon, h, cfg)
+            and any(
                 weapon.box[0] - margin <= x <= weapon.box[2] + margin
                 and weapon.box[1] - margin <= y <= weapon.box[3] + margin
                 for x, y in wrists
-            ):
-                detections.setdefault(weapon.kind, set()).add(weapon)
-    held = [k for k, found in detections.items() if len(found) >= cfg.hold_min_detections]
+            )
+        }
+        for kind in kinds:
+            counts[kind] = counts.get(kind, 0) + 1
+    need = max(1, math.ceil(cfg.hold_min_share * len(seen) - 1e-9))
+    held = [k for k, n in counts.items() if n >= need]
     if not held:
         return None
-    return max(held, key=lambda k: (len(detections[k]), k == "gun"))
+    return max(held, key=lambda k: (counts[k], k == "gun"))
 
 
 def distance_series(

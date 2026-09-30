@@ -42,7 +42,8 @@ notify:
 features:                 # person and pair features over a window (SPEC §4–5); units: person heights
   min_keypoint_conf: 0.5  # keypoints below this score are ignored
   hold_margin_h: 0.1      # "holds": weapon box expanded by this many heights must contain a wrist…
-  hold_min_detections: 2  # …in at least this many distinct detections of the window (held boxes count once)
+  hold_min_share: 0.4     # …in at least this share of the detector runs while the person is in view (min 1)
+  weapon_max_height_h: 0.5  # a weapon box taller than this many person heights is implausible (decision 30.09.3)
   pair_max_distance_h: 2.0  # only pairs closer than this go into the scene description…
   max_pairs: 5            # …at most this many, nearest first
   contact_distance_h: 1.0 # a pair closer than this is in contact (duration_s)
@@ -111,10 +112,11 @@ incidents:                  # incident state machine (SPEC §7)
   n: 5
   quiet_s: 10.0             # COOLDOWN -> NORMAL after this long below theta_low (M)
   merge_after_close_s: 30.0 # a new incident this soon after the previous one closed joins it…
-  merge_participants_max_s: null  # …as does one sharing participants (null = any time later, as in SPEC §7)
+  merge_participants_max_s: 120.0  # …as does one sharing participants this soon (decision 30.09.6)
   max_new_per_minute: 6     # more new incidents per minute are folded into one summary
   update_interval_s: 10.0   # at most one update event per incident this often
   weapon_override_margin: 0.1  # weapon in hand -> risk >= theta_high + margin
+  weapon_confirm_windows: 2 # ALARM at once only if the same track holds a weapon this many windows in a row
   blur_faces: true
   output_dir: results/incidents
 

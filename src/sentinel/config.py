@@ -78,7 +78,8 @@ class NotifyConfig(_Section):
 class FeaturesConfig(_Section):
     min_keypoint_conf: float = Field(ge=0, le=1)
     hold_margin_h: float = Field(ge=0)
-    hold_min_detections: int = Field(ge=1)
+    hold_min_share: float = Field(gt=0, le=1)
+    weapon_max_height_h: float = Field(gt=0)
     pair_max_distance_h: float = Field(gt=0)
     max_pairs: int = Field(ge=0, le=5)  # SPEC §5: at most 5 pairs per scene description
     contact_distance_h: float = Field(gt=0)
@@ -119,6 +120,7 @@ class IncidentsConfig(_Section):
     max_new_per_minute: int = Field(ge=1)
     update_interval_s: float = Field(ge=0)
     weapon_override_margin: float = Field(ge=0)
+    weapon_confirm_windows: int = Field(ge=1)
     blur_faces: bool
     output_dir: Path
 

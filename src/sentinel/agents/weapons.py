@@ -95,12 +95,14 @@ class WeaponDetector:
     def reset(self) -> None:
         self._frames_since_run: int | None = None
         self._boxes: list[WeaponBox] = []
+        self.ran = False  # the model ran on the last frame given to `detect` (else its boxes were kept)
 
     def detect(
         self, frame: np.ndarray, people: Sequence[tuple[float, float, float, float]] = ()
     ) -> list[WeaponBox]:
         """Weapon boxes; `people` (person boxes) are needed in the crops mode only."""
-        if self._frames_since_run is None or self._frames_since_run >= self.every_n_frames - 1:
+        self.ran = self._frames_since_run is None or self._frames_since_run >= self.every_n_frames - 1
+        if self.ran:
             self._boxes = self._run(frame, people)
             self._frames_since_run = 0
         else:

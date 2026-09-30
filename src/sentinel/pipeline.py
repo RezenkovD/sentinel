@@ -111,9 +111,10 @@ class Pipeline:
         timing["pose"] = _ms_since(started)
         started = time.perf_counter()
         weapons = self.agents.weapons.detect(frame.image, [t.box for t in tracks])
+        weapon_run = getattr(self.agents.weapons, "ran", True)
         timing["weapons"] = _ms_since(started)
         started = time.perf_counter()
-        scene = self.builder.add(frame.t, tracks, skeletons, weapons)
+        scene = self.builder.add(frame.t, tracks, skeletons, weapons, weapon_run)
         timing["scene"] = _ms_since(started)
         events = []
         started = time.perf_counter()

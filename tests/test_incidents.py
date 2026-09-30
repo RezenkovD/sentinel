@@ -17,6 +17,7 @@ BASE = IncidentsConfig(
     max_new_per_minute=6,
     update_interval_s=10.0,
     weapon_override_margin=0.1,
+    weapon_confirm_windows=2,
     blur_faces=True,
     output_dir=Path("results/incidents"),
 )
@@ -88,11 +89,35 @@ def test_k_of_n_high_windows_open_an_alarm():
     assert manager.state is State.ALARM
 
 
-def test_weapon_in_hand_opens_an_alarm_at_once():
+def test_weapon_held_by_the_same_person_in_two_consecutive_windows_opens_an_alarm_at_once():
     manager, keyframes = _manager()
-    events = _feed(manager, [0.7], holds_at={0})
-    assert _kinds(events) == ["open"] and events[0].level == "alarm"
+    events = _feed(manager, [0.3, 0.3], holds_at={0, 1})  # low risk: the weapon rule alone
+    assert _kinds(events) == ["open"] and events[0].level == "alarm" and events[0].t == 2.0
     assert keyframes.saved[0][1] == "keyframe"
+
+
+def test_weapon_in_a_single_window_does_not_open_an_alarm():
+    manager, _ = _manager()
+    assert _feed(manager, [0.3, 0.3], holds_at={0}) == [] and manager.state is State.NORMAL
+
+
+def test_weapon_held_by_different_people_is_not_confirmed():
+    manager, _ = _manager()
+    events = manager.on_window(1.0, _risk(0.3), _scene(1.0, (1, 2), "gun"))
+    events += manager.on_window(2.0, _risk(0.3), _scene(2.0, (3, 4), "gun"))
+    assert events == [] and manager.state is State.NORMAL
+
+
+def test_a_gap_between_windows_breaks_the_confirmation():
+    manager, _ = _manager()
+    events = manager.on_window(1.0, _risk(0.3), _scene(1.0, holds="gun"))
+    events += manager.on_window(3.0, _risk(0.3), _scene(3.0, holds="gun"))  # window 2.0-3.0 follows 0.0-1.0
+    assert events == []
+
+
+def test_one_window_confirmation_restores_the_immediate_rule():
+    manager, _ = _manager(weapon_confirm_windows=1)
+    assert _kinds(_feed(manager, [0.3], holds_at={0})) == ["open"]
 
 
 def test_keyframe_is_the_highest_risk_window_before_opening():
@@ -148,7 +173,9 @@ def test_other_people_long_after_closing_open_a_new_incident():
 
 def test_weapon_appearing_during_a_fight_escalates_with_a_new_keyframe():
     manager, keyframes = _manager()
-    events = _feed(manager, [0.7, 0.7, 0.7, 0.8, 0.8], holds_at={4})
+    events = _feed(manager, [0.7, 0.7, 0.7, 0.8, 0.8], holds_at={3})
+    assert _kinds(events) == ["open"]  # one window with a weapon is not enough
+    events += _feed(manager, [0.8, 0.8], start=6.0, holds_at={0, 1})
     assert _kinds(events) == ["open", "escalate"]
     assert [name for _, name, _ in keyframes.saved] == ["keyframe", "escalate_1"]
 

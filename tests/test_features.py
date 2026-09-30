@@ -17,7 +17,8 @@ from sentinel.agents.weapons import WeaponBox
 CFG = FeatureConfig(
     min_keypoint_conf=0.5,
     hold_margin_h=0.1,
-    hold_min_detections=2,
+    hold_min_share=0.4,
+    weapon_max_height_h=0.5,
     pair_max_distance_h=2.0,
     max_pairs=5,
     contact_distance_h=1.0,
@@ -93,9 +94,10 @@ def test_weapon_at_the_wrist_in_two_frames_is_held():
     assert holds(track, weapons, H, CFG) == "gun"
 
 
-def test_weapon_at_the_wrist_in_a_single_frame_is_not_held():
+def test_weapon_at_the_wrist_in_one_of_three_detector_runs_is_not_held():
     track = _wrist_track([0.0, 0.1, 0.2], [50.0, 50.0, 50.0])
-    assert holds(track, {0.0: [_gun_at(50.0, 50.0)]}, H, CFG) is None
+    runs = {0.0: [_gun_at(50.0, 50.0)], 0.1: [], 0.2: []}  # the detector ran in all three frames
+    assert holds(track, runs, H, CFG) is None
 
 
 def test_weapon_nearby_but_not_in_hand_is_not_held():
@@ -165,10 +167,27 @@ def test_contact_duration_carries_over_the_window_boundary_and_resets_on_separat
     assert windows == pytest.approx([0.4, 1.3, 0.0])
 
 
-def test_one_detection_kept_over_frames_by_the_every_nth_schedule_counts_once():
-    # the weapon detector runs every 2nd frame and keeps its last boxes in between: the same box twice
-    track = _wrist_track([0.0, 0.1, 0.2, 0.3], [50.0, 50.0, 50.0, 50.0])
-    same = _gun_at(50.0, 50.0)
-    assert holds(track, {0.0: [same], 0.1: [same]}, H, CFG) is None
-    fresh = WeaponBox("gun", (46.0, 45.0, 56.0, 55.0), 0.7)  # a new detection two frames later
-    assert holds(track, {0.0: [same], 0.1: [same], 0.2: [fresh], 0.3: [fresh]}, H, CFG) == "gun"
+def test_share_of_detector_runs_needed_scales_with_how_often_the_detector_ran():
+    # 10 frames/s, detector every 2nd frame: 5 runs in a window, a weapon in 2 of them (0.4) is held
+    track = _wrist_track([i / 10 for i in range(10)], [50.0] * 10)
+    runs = {0.0: [_gun_at(50.0, 50.0)], 0.2: [_gun_at(50.0, 50.0)], 0.4: [], 0.6: [], 0.8: []}
+    assert holds(track, runs, H, CFG) == "gun"
+    runs[0.2] = []
+    assert holds(track, runs, H, CFG) is None
+    # Sevilla sequences, 2 frames/s, detector on every frame: one detection of two runs is enough
+    slow = _wrist_track([0.0, 0.5], [50.0, 50.0])
+    assert holds(slow, {0.0: [_gun_at(50.0, 50.0)], 0.5: []}, H, CFG) == "gun"
+
+
+def test_runs_before_the_person_appeared_do_not_count_against_them():
+    track = _wrist_track([0.6, 0.8], [50.0, 50.0])  # enters late in the window
+    runs = {0.0: [], 0.2: [], 0.4: [], 0.6: [_gun_at(50.0, 50.0)], 0.8: [_gun_at(50.0, 50.0)]}
+    assert holds(track, runs, H, CFG) == "gun"
+
+
+def test_weapon_box_taller_than_half_the_person_is_implausible():
+    track = _wrist_track([0.0, 0.2], [50.0, 50.0])
+    whole_person = WeaponBox("gun", (0.0, 0.0, 60.0, 90.0), 0.9)  # 0.9 heights tall, around the wrist
+    assert holds(track, {0.0: [whole_person], 0.2: [whole_person]}, H, CFG) is None
+    rifle = WeaponBox("gun", (20.0, 30.0, 90.0, 75.0), 0.9)  # 0.45 heights tall: still plausible
+    assert holds(track, {0.0: [rifle], 0.2: [rifle]}, H, CFG) == "gun"

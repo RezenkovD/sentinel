@@ -50,6 +50,15 @@ def test_every_second_frame_mode_keeps_the_last_boxes_in_between():
     assert confs == [0.1, 0.1, 0.2, 0.2, 0.3]
 
 
+def test_detector_reports_whether_the_model_ran_on_the_last_frame():
+    detector = WeaponDetector(CountingModel(), every_n_frames=2)
+    ran = []
+    for _ in range(5):
+        detector.detect(FRAME)
+        ran.append(detector.ran)
+    assert ran == [True, False, True, False, True]
+
+
 def test_reset_forgets_boxes_and_restarts_the_schedule():
     model = CountingModel()
     detector = WeaponDetector(model, every_n_frames=2)
