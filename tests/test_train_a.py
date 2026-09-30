@@ -119,3 +119,18 @@ def test_saved_model_loads_with_its_metadata_and_refuses_another_perception(tmp_
     path.write_text(json.dumps(data))
     with pytest.raises(ValueError, match="perception"):
         RulesAggregator.load(path, CONFIG)
+
+
+def test_excluded_features_get_no_weight_and_the_rest_matches_the_reduced_pipeline():
+    train, val = _episodes(60, 1, "train"), _episodes(30, 2, "val")
+    excluded = ("weapon_visible", "weapon_held", "facing_close")
+    result = fit_a(train, val, CONFIG, c_grid=(1.0,), seed=2026, exclude=excluded)
+    a = result.aggregator
+    for name in excluded:
+        assert a.weights[FEATURE_NAMES.index(name)] == 0.0
+    keep = [i for i, n in enumerate(FEATURE_NAMES) if n not in excluded]
+    rng = np.random.default_rng(5)
+    for scene in [_scene(rng, fight) for fight in (True, False) for _ in range(4)]:
+        x = scene_to_features(scene, CONFIG)
+        expected = result.pipeline.predict_proba(x[keep][None, :])[0, 1]
+        assert a.assess(scene).risk == pytest.approx(expected, abs=0.006)

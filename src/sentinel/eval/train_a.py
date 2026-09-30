@@ -23,7 +23,7 @@ import numpy as np
 
 from sentinel.aggregators.rules import FEATURE_NAMES, FEATURE_NAMES_UK, RulesAggregator, scene_to_features
 from sentinel.config import DEFAULT_CONFIG, Config, load_config
-from sentinel.eval.cache import OUT_DEFAULT, CachedEpisode, _auc, load_episodes
+from sentinel.eval.cache import OUT_DEFAULT, CachedEpisode, _auc, check_complete, load_episodes
 
 C_GRID = (0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0)
 EPISODE_RULES = ("max", "top2", "mean")
@@ -69,10 +69,20 @@ def fit_a(
     config: Config,
     c_grid: tuple[float, ...] = C_GRID,
     seed: int = 2026,
+    exclude: tuple[str, ...] = (),
 ) -> FitResult:
-    """Fit on train for every C; keep the one with the best window AUC on val (ties: the smaller C)."""
+    """Fit on train for every C; keep the one with the best window AUC on val (ties: the smaller C).
+
+    `exclude` leaves features out of the regression: they keep weight 0 in the exported model (e.g. weapon
+    features, which RWF can only teach from false detections; weapons are handled by the rule).
+    """
+    unknown = set(exclude) - set(FEATURE_NAMES)
+    if unknown:
+        raise ValueError(f"unknown features to exclude: {sorted(unknown)}")
+    keep = [i for i, name in enumerate(FEATURE_NAMES) if name not in exclude]
     x, y = train_windows(train, config)
     xv, yv = train_windows(val, config)
+    x, xv = x[:, keep], xv[:, keep]
     clip = config.aggregator_a.clip
     best, by_c = None, []
     for c in c_grid:
@@ -83,13 +93,11 @@ def fit_a(
             best = (c, auc, pipeline)
     c, auc, pipeline = best
     scaler, lr = pipeline.named_steps["scale"], pipeline.named_steps["lr"]
+    n = len(FEATURE_NAMES)
+    weights, mean, scale = np.zeros(n), np.zeros(n), np.ones(n)  # excluded features: weight 0
+    weights[keep], mean[keep], scale[keep] = lr.coef_[0], scaler.mean_, scaler.scale_
     aggregator = RulesAggregator(
-        weights=lr.coef_[0].copy(),
-        bias=float(lr.intercept_[0]),
-        mean=scaler.mean_.copy(),
-        scale=scaler.scale_.copy(),
-        clip=clip,
-        config=config,
+        weights=weights, bias=float(lr.intercept_[0]), mean=mean, scale=scale, clip=clip, config=config
     )
     return FitResult(pipeline, aggregator, c, auc, by_c)
 
@@ -134,6 +142,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--episodes", type=Path, default=OUT_DEFAULT)
     parser.add_argument("--seed", type=int, default=2026)
+    parser.add_argument("--allow-partial", action="store_true", help="run on a cache still being extracted")
     parser.add_argument(
         "--high-quantile", type=float, default=0.95, help="θ_high: quantile of calm val windows"
     )
@@ -142,13 +151,18 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument("--model", type=Path, default=Path("weights/aggregator_a/a_v1.json"))
     parser.add_argument(
+        "--exclude", nargs="*", default=[], choices=FEATURE_NAMES, help="features left out of the regression"
+    )
+    parser.add_argument(
         "--out", type=Path, default=Path(f"results/aggregator_a_{date.today().isoformat()}.md")
     )
     args = parser.parse_args(argv)
     config = load_config(args.config)
     train = load_episodes(args.episodes, "rwf2000", ["train"])
     val = load_episodes(args.episodes, "rwf2000", ["val"])
-    result = fit_a(train, val, config, seed=args.seed)
+    check_complete(train, "rwf2000", ["train"], allow_partial=args.allow_partial)
+    check_complete(val, "rwf2000", ["val"], allow_partial=args.allow_partial)
+    result = fit_a(train, val, config, seed=args.seed, exclude=tuple(args.exclude))
     a = result.aggregator
 
     val_risks = [[a.assess(s).risk for s in e.scenes] for e in val]  # empty windows: 0, as A really answers
@@ -186,6 +200,7 @@ def main(argv: list[str] | None = None) -> None:
         "trained_on": {"train_episodes": len(train), "val_episodes": len(val)},
         "c": result.c,
         "c_grid": [{"c": c, "window_auc_val": auc} for c, auc in result.by_c],
+        "excluded_features": list(args.exclude),
         "episode_rule": rule,
         "episode_threshold": threshold,
         "theta_high": theta_high,

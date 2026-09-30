@@ -17,7 +17,7 @@ from pathlib import Path
 
 import numpy as np
 
-from sentinel.eval.cache import OUT_DEFAULT, CachedEpisode, _auc, load_episodes
+from sentinel.eval.cache import OUT_DEFAULT, CachedEpisode, _auc, check_complete, load_episodes
 from sentinel.eval.train_a import f1_threshold
 
 WEAPON_GRID = tuple(round(0.05 * i, 2) for i in range(1, 20))
@@ -82,18 +82,32 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--episodes", type=Path, default=OUT_DEFAULT)
     parser.add_argument("--out", type=Path, default=Path(f"results/baselines_{date.today().isoformat()}.md"))
+    parser.add_argument("--allow-partial", action="store_true", help="run on a cache still being extracted")
     args = parser.parse_args(argv)
     sevilla = load_episodes(args.episodes, "us_gun", ["select"])
-    normal = [e for e in load_episodes(args.episodes, "rwf2000", ["train"]) if e.label == 0]
+    train = load_episodes(args.episodes, "rwf2000", ["train"])
+    val = load_episodes(args.episodes, "rwf2000", ["val"])
+    for episodes, dataset, part in (
+        (sevilla, "us_gun", "select"),
+        (train, "rwf2000", "train"),
+        (val, "rwf2000", "val"),
+    ):
+        check_complete(episodes, dataset, [part], allow_partial=args.allow_partial)
+    normal = [e for e in train if e.label == 0]
     weapon = weapon_baseline(sevilla, normal)
-    motion = motion_baseline(load_episodes(args.episodes, "rwf2000", ["val"]))
+    motion = motion_baseline(val)
     lines = [
         f"# Базові методи на кеші — {date.today().isoformat()}",
         "",
         "## baseline_weapon (детекція зброї з порогом, як у бакалаврській)",
         "",
-        f"- Поріг τ = {_fmt(weapon['threshold'])}: найменший, за якого NonFight нашого train RWF дають ≤ 1 % "
-        f"кліпів із тривогою (усього {weapon['normal_clips']} кліпів).",
+        (
+            f"- Поріг τ = {_fmt(weapon['threshold'])}: найменший, за якого NonFight нашого train RWF "
+            f"дають ≤ 1 % кліпів із тривогою (усього {weapon['normal_clips']} кліпів)."
+            if weapon["false_alarm_share"] <= weapon["max_false_alarm"] + 1e-9
+            else f"- Жоден поріг сітки не дає ≤ 1 % хибних тривог; τ = {_fmt(weapon['threshold'])} — з "
+            f"найменшою часткою хибних ({weapon['false_alarm_share']:.1%} з {weapon['normal_clips']} кліпів)."
+        ),
         f"- Севілья Cam1 + Cam5: повнота вікон {_fmt(weapon['window_recall'])}, сегментів "
         f"{_fmt(weapon['segment_recall'])}; хибні тривоги на NonFight train: "
         f"{weapon['false_alarm_share']:.1%}.",

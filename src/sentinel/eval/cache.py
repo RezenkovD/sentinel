@@ -88,3 +88,34 @@ def feature_aucs(episodes: list[CachedEpisode], config) -> list[dict]:
             row |= {"auc_all": _auc(y, x[:, j]), "windows_all": len(y)}
         table.append(row)
     return table
+
+
+def expected_episodes(dataset: str, parts: list[str], splits: Path = Path("data/splits")) -> int:
+    """How many episodes the split files promise for these parts."""
+    if dataset == "rwf2000":
+        data = json.loads((splits / "rwf2000.json").read_text())
+        return sum(len(data[p]) for p in parts)
+    if dataset == "us_gun":
+        data = json.loads((splits / "us_gun.json").read_text())
+        return sum(len(data["segments"][p]) for p in parts)
+    if dataset == "xd":
+        return len(json.loads((splits / "xd_subset.json").read_text())["videos"])
+    raise ValueError(f"unknown dataset {dataset!r}")
+
+
+def check_complete(
+    episodes: list[CachedEpisode],
+    dataset: str,
+    parts: list[str],
+    splits: Path = Path("data/splits"),
+    allow_partial: bool = False,
+    warn=print,
+) -> None:
+    """Refuse to compute results on a cache that is still being extracted (unless explicitly allowed)."""
+    expected = expected_episodes(dataset, parts, splits)
+    if len(episodes) >= expected:
+        return
+    message = f"{dataset} {'+'.join(parts)}: {len(episodes)} of {expected} episodes in the cache"
+    if not allow_partial:
+        raise RuntimeError(message + " — wait for the extraction or pass --allow-partial")
+    warn("WARNING: " + message + " (partial, --allow-partial)")

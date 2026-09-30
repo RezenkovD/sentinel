@@ -18,7 +18,7 @@ from pathlib import Path
 
 import numpy as np
 
-from sentinel.eval.cache import OUT_DEFAULT, CachedEpisode, load_episodes
+from sentinel.eval.cache import OUT_DEFAULT, CachedEpisode, check_complete, load_episodes
 from sentinel.incidents import WeaponConfirmation
 from sentinel.schema import SceneDescription
 
@@ -54,9 +54,14 @@ def alarm_share(episodes: list[CachedEpisode], windows: int) -> float:
     return float(np.mean([any(weapon_alarms(e.scenes, windows)) for e in episodes])) if episodes else 0.0
 
 
-def evaluate(root: Path) -> dict:
+def evaluate(root: Path, allow_partial: bool = False) -> dict:
     sevilla = load_episodes(root, "us_gun", ["select"])
+    check_complete(sevilla, "us_gun", ["select"], allow_partial=allow_partial)
     normal = [e for e in load_episodes(root, "rwf2000", ["train"]) if e.label == 0]
+    if len(normal) < 640 and not allow_partial:  # a crops cache holds NonFight clips only
+        raise RuntimeError(
+            f"{root}: {len(normal)} of 640 NonFight train clips — wait or pass --allow-partial"
+        )
     rows = {}
     for windows in (2, 1):
         seg = segment_recall(sevilla, windows)
@@ -85,11 +90,12 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--out", type=Path, default=Path(f"results/weapon_rule_{date.today().isoformat()}.md")
     )
+    parser.add_argument("--allow-partial", action="store_true", help="run on a cache still being extracted")
     args = parser.parse_args(argv)
     modes = {"кадр 480:2": args.episodes}
     if args.crops_episodes is not None:
         modes["вирізки 320:2"] = args.crops_episodes
-    results = {mode: evaluate(root) for mode, root in modes.items()}
+    results = {mode: evaluate(root, args.allow_partial) for mode, root in modes.items()}
     lines = [
         f"# Правило «зброя в руці» на кеші — {date.today().isoformat()}",
         "",

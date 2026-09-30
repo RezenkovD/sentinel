@@ -84,3 +84,21 @@ def test_windows_without_people_are_left_out_of_a_features_but_kept_for_pixel_mo
     assert table["motion_energy"]["windows_all"] == 3 and table["motion_energy"]["auc_all"] == pytest.approx(
         1.0
     )
+
+
+def test_an_incomplete_cache_is_refused_unless_allowed(tmp_path: Path):
+    from sentinel.eval.cache import check_complete
+
+    splits = tmp_path / "splits"
+    splits.mkdir()
+    (splits / "rwf2000.json").write_text(
+        json.dumps({"train": ["train/Fight/a.avi", "train/NonFight/b.avi", "train/Fight/c.avi"], "val": []})
+    )
+    _write(tmp_path, "train/Fight/a", 1, [1.0])
+    _write(tmp_path, "train/NonFight/b", 0, [0.1])
+    episodes = load_episodes(tmp_path, "rwf2000", parts=["train"])
+    with pytest.raises(RuntimeError, match="2 of 3"):
+        check_complete(episodes, "rwf2000", ["train"], splits)
+    warnings: list[str] = []
+    check_complete(episodes, "rwf2000", ["train"], splits, allow_partial=True, warn=warnings.append)
+    assert warnings and "2 of 3" in warnings[0]
