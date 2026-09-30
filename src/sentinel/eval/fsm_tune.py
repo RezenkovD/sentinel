@@ -223,21 +223,28 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--streams", type=int, default=200)
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--allow-partial", action="store_true")
+    parser.add_argument("--theta-low", type=float, nargs="+", default=list(THETA_LOW_GRID))
+    parser.add_argument("--quiet-s", type=float, nargs="+", default=list(QUIET_GRID))
     parser.add_argument("--out", type=Path, default=Path(f"results/fsm_tuning_{date.today().isoformat()}.md"))
     args = parser.parse_args(argv)
     config = load_config(args.config)
     val = load_episodes(args.episodes, "rwf2000", ["val"])
     check_complete(val, "rwf2000", ["val"], allow_partial=args.allow_partial)
-    fights, calms = scored_clips(val, make_aggregator(config))
+    aggregator = make_aggregator(config)
+    fights, calms = scored_clips(val, aggregator)
     streams = build_streams(fights, calms, args.streams, args.seed)
     base = config.incidents
     rows = [
         evaluate(streams, replace_cfg(base, theta_low, quiet_s))
-        for theta_low in THETA_LOW_GRID
-        for quiet_s in QUIET_GRID
+        for theta_low in args.theta_low
+        for quiet_s in args.quiet_s
         if theta_low < base.theta_high
     ]
     best = choose(rows)
+    # decision 30.09, item 4: the same streams without A's one-window "weapon in hand" floor
+    aggregator.weapon_override = False
+    plain = build_streams(*scored_clips(val, aggregator), args.streams, args.seed)
+    no_override = evaluate(plain, replace_cfg(base, best["theta_low"], best["quiet_s"]))
     current = next(
         (
             r
@@ -253,7 +260,7 @@ def main(argv: list[str] | None = None) -> None:
         f"Склейок {len(streams)} (seed {args.seed}), {video_h:.1f} год відео з кліпів нашого val RWF "
         f"({len(fights)} Fight, {len(calms)} NonFight): 3 спокійні кліпи, далі тричі бійка з 2–4 кліпів "
         "Fight і спокійна пауза з 3–9 кліпів NonFight. Ризик вікон — A з конфігу "
-        f"(`{config.aggregator_a.model}`); θ_high = {_num(base.theta_high)} не змінюється; k = {base.k} з "
+        f"(`{config.aggregator_a.model}`); θ_high = {_theta(base.theta_high)} не змінюється; k = {base.k} з "
         f"n = {base.n}.",
         "",
         "Бійка **опрацьована**, якщо під час неї відкрито інцидент, він закрився не пізніше M + 5 с після "
@@ -275,11 +282,17 @@ def main(argv: list[str] | None = None) -> None:
         "",
         f"Обрано: θ_low = {_theta(best['theta_low'])}, M = {_num(best['quiet_s'])} с — найбільша "
         "частка опрацьованих бійок, далі найменше інцидентів у спокої, далі коротше M.",
+        "",
+        "Без одновіконного перекриття A «зброя в руці» (ті самі склейки, обрані θ_low і M): опрацьовано "
+        f"{_pct(no_override['handled'])}, виявлено {_pct(no_override['detected'])}, інцидентів у спокої "
+        f"{_num(no_override['calm_incidents_per_h'])} / год (з перекриттям — {_pct(best['handled'])}, "
+        f"{_pct(best['detected'])}, {_num(best['calm_incidents_per_h'])} / год).",
     ]
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text("\n".join(lines) + "\n", encoding="utf-8")
     args.out.with_suffix(".json").write_text(
-        json.dumps({"rows": rows, "best": best}, indent=1), encoding="utf-8"
+        json.dumps({"rows": rows, "best": best, "without_weapon_override": no_override}, indent=1),
+        encoding="utf-8",
     )
     print("\n".join(lines))
 
