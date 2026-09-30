@@ -167,3 +167,67 @@ def test_only_live_extraction_processes_are_paused(tmp_path: Path):
     finally:
         extraction.kill()
         other.kill()
+
+
+def _stat(tmp: Path, busy: int, idle: int = 10_000) -> None:
+    """A /proc/stat whose first line has `busy` jiffies of user time and `idle` idle jiffies."""
+    (tmp / "stat").write_text(
+        f"cpu  {busy} 0 0 {idle} 0 0 0 0 0 0\ncpu0 1 0 0 1 0 0 0 0 0 0\nprocs_running 9\n"
+    )
+
+
+def _pid_stat(tmp: Path, pid: int, utime: int, stime: int) -> None:
+    fields = ["S"] + ["0"] * 10 + [str(utime), str(stime)] + ["0"] * 30
+    (tmp / str(pid)).mkdir(exist_ok=True)
+    (tmp / str(pid) / "stat").write_text(f"{pid} (python) " + " ".join(fields) + "\n")
+
+
+def test_foreign_cpu_is_the_machine_busy_time_minus_ours_per_second(tmp_path: Path):
+    """Cumulative counters: our threads switching state between two reads cannot inflate it (30.09: every
+    torch run of the quiet bench looked noisy by the task-count estimate)."""
+    from sentinel.quiet import ForeignCpu
+
+    clock = FakeClock()
+    sampler = ForeignCpu(lambda: {42}, proc=tmp_path, clock=clock, hz=100)
+    _stat(tmp_path, busy=1_000)
+    _pid_stat(tmp_path, 42, utime=500, stime=100)
+    assert sampler() == 0.0  # the first reading only sets the counters
+    clock.sleep(2)
+    _stat(tmp_path, busy=1_000 + 700)  # 7 CPU-seconds over 2 s: 3.5 cores busy…
+    _pid_stat(tmp_path, 42, utime=500 + 550, stime=100 + 50)  # …6 of them ours
+    assert sampler() == pytest.approx(0.5)
+
+
+def test_a_process_seen_in_only_one_reading_is_left_out_of_that_interval(tmp_path: Path):
+    from sentinel.quiet import ForeignCpu
+
+    clock, own = FakeClock(), {42}
+    sampler = ForeignCpu(lambda: set(own), proc=tmp_path, clock=clock, hz=100)
+    _stat(tmp_path, busy=0)
+    _pid_stat(tmp_path, 42, utime=0, stime=0)
+    sampler()
+    clock.sleep(1)
+    own.add(43)  # an extraction registered in between: its lifetime CPU must not be subtracted now
+    _pid_stat(tmp_path, 43, utime=10_000, stime=0)
+    _stat(tmp_path, busy=150)
+    _pid_stat(tmp_path, 42, utime=100, stime=0)
+    assert sampler() == pytest.approx(0.5)
+
+
+def test_a_combination_that_stays_noisy_does_not_block_the_others():
+    clock, measured, events = FakeClock(), [], []
+    current = [None]
+    runner = _runner(lambda t: 3.0 if current[0] == "a" else 0.5, measured, events, clock)
+    inner = runner.measure
+
+    def measure(combo, during):
+        current[0] = combo
+        try:
+            return inner(combo, during)
+        finally:
+            current[0] = None
+
+    runner.measure, runner.max_attempts = measure, 3
+    rows = runner.run(["a", "b", "c"], deadline_s=100_000)
+    clean = [r["combo"] for r in rows if not r["noisy"]]
+    assert clean == ["b", "c"] and [r["combo"] for r in rows].count("a") == 3  # given up after 3 tries

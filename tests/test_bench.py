@@ -351,3 +351,13 @@ def test_quiet_report_says_whether_the_extraction_was_paused_for_the_whole_bench
     held = render_quiet_report([_quiet_row("openvino", noisy=False, rtf=0.5) | {"extraction_held": True}], [])
     per_run = render_quiet_report([_quiet_row("openvino", noisy=False, rtf=0.5)], [])
     assert "призупинено на весь замір" in held and "на час кожного прогону" in per_run
+
+
+def test_quiet_report_names_the_foreign_load_measure():
+    from sentinel.bench import render_quiet_report
+
+    cpu = render_quiet_report(
+        [_quiet_row("openvino", noisy=False, rtf=0.5) | {"foreign_load": "cpu_time"}], []
+    )
+    tasks = render_quiet_report([_quiet_row("openvino", noisy=False, rtf=0.5)], [])
+    assert "час процесора" in cpu and "задачі, що виконуються" in tasks

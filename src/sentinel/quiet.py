@@ -49,6 +49,49 @@ def own_busy_threads(pids: set[int], proc: Path = Path("/proc")) -> int:
     return busy
 
 
+class ForeignCpu:
+    """CPU cores kept busy by other processes since the previous reading: the machine's busy time (/proc/stat)
+    minus that of our processes (utime + stime of /proc/<pid>/stat), per second of wall time.
+
+    Cumulative counters, so our own threads switching state between two reads cannot inflate it — the
+    task-count estimate did: on 30.09 every torch run of the quiet bench looked noisy while other processes
+    used about half a core. A process seen in only one of two readings is left out of that interval.
+    """
+
+    def __init__(
+        self,
+        own: Callable[[], set[int]],
+        proc: Path = Path("/proc"),
+        clock: Callable[[], float] = time.monotonic,
+        hz: int | None = None,
+    ) -> None:
+        self.own, self.proc, self.clock = own, proc, clock
+        self.hz = hz or os.sysconf("SC_CLK_TCK")
+        self._last: tuple[float, int, dict[int, int]] | None = None
+
+    def _machine(self) -> int:
+        fields = (self.proc / "stat").read_text().splitlines()[0].split()[1:9]
+        user, nice, system, _idle, _iowait, irq, softirq, steal = (int(v) for v in fields)
+        return user + nice + system + irq + softirq + steal
+
+    def _process(self, pid: int) -> int | None:
+        try:
+            text = (self.proc / str(pid) / "stat").read_text()
+        except OSError:  # the process is gone
+            return None
+        fields = text[text.rindex(")") + 2 :].split()  # the name may contain spaces and parentheses
+        return int(fields[11]) + int(fields[12])  # utime and stime: fields 14 and 15 of the line
+
+    def __call__(self) -> float:
+        t, machine = self.clock(), self._machine()
+        ours = {pid: v for pid in self.own() if (v := self._process(pid)) is not None}
+        last, self._last = self._last, (t, machine, ours)
+        if last is None or t <= last[0]:
+            return 0.0
+        mine = sum(v - last[2][pid] for pid, v in ours.items() if pid in last[2])
+        return max(0.0, (machine - last[1] - mine) / self.hz / (t - last[0]))
+
+
 @dataclass
 class LoadWindow:
     """Rolling mean of load samples over the last `span_s` seconds, and how long it has stayed low."""
@@ -98,6 +141,7 @@ class QuietRunner:
     log: Callable[[str], None] = lambda message: None
     on_row: Callable[[dict], None] = lambda row: None  # called with every finished row (to save it at once)
     hold_pause: bool = False  # keep our background work paused from the first measurement to the end
+    max_attempts: int = 5  # a combination noisy this many times is given up; a noisy one waits at the back
 
     def run(self, combos: Sequence[Any], deadline_s: float) -> list[dict]:
         paused = [False]
@@ -113,6 +157,7 @@ class QuietRunner:
         window = LoadWindow(self.span_s)
         started = self.clock()
         waiting_logged = None
+        attempts: dict[str, int] = {}
         while pending and self.clock() - started < deadline_s:
             t = self.clock()
             window.add(t, self.sample())
@@ -156,8 +201,15 @@ class QuietRunner:
             self.log(
                 f"{'noisy, will repeat' if noisy else 'done'}: {combo} (foreign load max {max(means):.2f})"
             )
-            if not noisy:
-                pending.pop(0)
+            pending.pop(0)
+            if noisy:
+                attempts[repr(combo)] = attempts.get(repr(combo), 0) + 1
+                if attempts[repr(combo)] < self.max_attempts:
+                    pending.append(
+                        combo
+                    )  # the others go first: a combination that stays noisy blocks nothing
+                else:
+                    self.log(f"given up after {self.max_attempts} noisy runs: {combo}")
             waiting_logged = None
         return rows
 

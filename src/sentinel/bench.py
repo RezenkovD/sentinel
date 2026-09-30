@@ -701,13 +701,18 @@ def render_quiet_report(rows: Sequence[dict], sources: Sequence[Path]) -> str:
     noisy = sum(row["noisy"] for row in rows)
     code = sorted({f"`{r.get('commit', '?')}` (сприйняття {r.get('perception_version', '?')})" for r in rows})
     held = bool(rows) and all(r.get("extraction_held") for r in rows)
+    measure = (
+        "ядра, зайняті іншими процесами: час процесора машини з `/proc/stat` мінус час наших процесів"
+        if rows and all(r.get("foreign_load") == "cpu_time" for r in rows)
+        else "задачі, що виконуються або чекають введення-виведення, без наших процесів"
+    )
     lines = [
         f"# Bench: тихий замір повного конвеєра — {time.strftime('%Y-%m-%d')}",
         "",
         "Середовище: " + "; ".join(environment_notes()) + ".",
         "Код, що міряли: " + (", ".join(code) if code else "—") + ".",
         f"Кліпів {len(sources)}; частота аналізу 10 кадрів/с. Замір стартує, коли 1-хвилинне середнє чужого "
-        "навантаження (задачі, що виконуються або чекають введення-виведення, без наших процесів) < 1,5 "
+        f"навантаження ({measure}) < 1,5 "
         "протягом 2 хв, від мережі, профіль `performance`; прогін, під час якого воно перевищило 2, — шумний "
         "і повторюється. Наше фонове вилучення "
         + ("призупинено на весь замір." if held else "призупинено на час кожного прогону."),
@@ -764,9 +769,9 @@ def run_quiet_bench(
     from sentinel.models import export_openvino
     from sentinel.pipeline import PERCEPTION_VERSION
     from sentinel.quiet import (
+        ForeignCpu,
         QuietRunner,
         extraction_pids,
-        foreign_load,
         machine_load_average,
         pause_extraction,
         resume_extraction,
@@ -807,6 +812,7 @@ def run_quiet_bench(
             "commit": commit,
             "perception_version": PERCEPTION_VERSION,
             "extraction_held": hold_extraction,
+            "foreign_load": "cpu_time",
             "clips": [s.name for s in sources],
         }
 
@@ -820,7 +826,7 @@ def run_quiet_bench(
 
     q = config.bench.quiet
     runner = QuietRunner(
-        sample=lambda: foreign_load(own),
+        sample=ForeignCpu(own),
         measure=measure,
         power=power,
         pause=pause_extraction,
