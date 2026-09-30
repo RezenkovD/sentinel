@@ -1,6 +1,7 @@
 """Episode cache (session 03, step 3): datasets -> episodes -> scene descriptions per window."""
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -199,3 +200,81 @@ def test_a_violent_xd_video_without_annotation_is_an_error(tmp_path: Path):
     )
     with pytest.raises(ValueError, match="annotation"):
         xd_episodes(subset, tmp_path, annotations, fps=10.0)
+
+
+def test_redo_replaces_only_files_of_another_perception(tmp_path: Path):
+    current, stale = tmp_path / "current.jsonl", tmp_path / "stale.jsonl"
+    meta = {"perception_version": "3.0", "perception_hash": "new"}
+    perception = FakePerception()
+    extract_episode(_episode(tmp_path), perception, current, meta)
+    extract_episode(_episode(tmp_path), perception, stale, meta | {"perception_hash": "old"})
+    resets = perception.resets
+    assert extract_episode(_episode(tmp_path), perception, current, meta, redo=True) is False
+    assert extract_episode(_episode(tmp_path), perception, stale, meta, redo=True) is True
+    assert perception.resets == resets + 1
+    assert json.loads(stale.read_text().splitlines()[0])["meta"]["perception_hash"] == "new"
+
+
+def test_a_file_cut_short_by_a_power_loss_is_extracted_again(tmp_path: Path):
+    out = tmp_path / "clip.jsonl"
+    out.write_text("")  # an empty file left by a crash before the data reached the disk
+    meta = {"perception_version": "3.0", "perception_hash": "abc"}
+    assert extract_episode(_episode(tmp_path), FakePerception(), out, meta) is True
+    assert json.loads(out.read_text().splitlines()[0])["meta"]["windows"] == 2
+
+
+def test_one_failing_episode_does_not_stop_the_others(tmp_path: Path):
+    from sentinel.eval.extract import extract_all
+
+    class FailsOnSecond(FakePerception):
+        def __init__(self) -> None:
+            super().__init__()
+            self.calls = 0
+
+        def reset(self) -> None:
+            super().reset()
+            self.calls += 1
+            if self.calls == 2:
+                raise OSError("cannot read the video")
+
+    episodes = []
+    for i in range(3):
+        e = _episode(tmp_path)
+        e.episode_id = f"dev/clip_{i}"
+        episodes.append(e)
+    log: list[str] = []
+    counts = extract_all(
+        episodes,
+        FailsOnSecond(),
+        tmp_path,
+        {"perception_version": "3.0", "perception_hash": "x"},
+        redo=False,
+        log=log.append,
+    )
+    assert counts == {"done": 2, "skipped": 0, "failed": 1}
+    assert (tmp_path / "demo" / "dev" / "clip_0.jsonl").exists() and (
+        tmp_path / "demo" / "dev" / "clip_2.jsonl"
+    ).exists()
+    assert any("clip_1" in line and "cannot read" in line for line in log)
+
+
+def test_meta_names_every_weight_file_hash_and_the_library_versions():
+    from sentinel.eval.extract import stage_meta
+
+    meta = stage_meta(CONFIG)
+    assert set(meta["weights_sha256"]) == {"people", "pose", "weapons"}
+    assert all(len(h) == 64 for h in meta["weights_sha256"].values())
+    assert {"ultralytics", "openvino", "torch", "opencv", "numpy"} <= set(meta["versions"])
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [["--dataset", "rwf2000"], ["--dataset", "rwf2000", "--parts", "train", "--weapons", "crops320:2"]],
+)
+def test_risky_argument_combinations_are_refused_before_anything_starts(argv: list[str]):
+    from sentinel.eval.extract import main
+
+    before = os.nice(0)
+    with pytest.raises(SystemExit):
+        main(argv)  # no --parts would silently mean the test part; --weapons without --out mixes caches
+    assert os.nice(0) == before  # refused before the process lowered its priority

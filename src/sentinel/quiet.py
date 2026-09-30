@@ -4,8 +4,9 @@ Dmytro keeps working on this laptop (PyCharm, other projects), so a measurement 
 itself: the 1-minute mean of *foreign* load — tasks running or waiting for I/O, as the kernel load average
 counts them, minus our own threads — below `start_limit` for `hold_s` seconds in a row, on mains power with
 the `performance` profile. A measurement during which that mean rose above `noisy_limit` is kept, marked noisy
-and repeated later. Our own background work (episode extraction, see EXTRACT_PIDFILE) is paused (SIGSTOP)
-for the duration of each measurement and resumed (SIGCONT) afterwards.
+and repeated later. Our own background work (episode extraction, see EXTRACT_PIDS) is paused (SIGSTOP)
+for the duration of each measurement and resumed (SIGCONT) afterwards; every extraction announces itself with
+a pid file in data/episodes/.extract/, checked against /proc/<pid>/cmdline before any signal is sent.
 
 Foreign load is used instead of /proc/loadavg because the measurement itself and our extraction also
 load the machine; the plain load average would call every measurement noisy.
@@ -19,8 +20,6 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-
-EXTRACT_PIDFILE = Path("data/episodes/.extract.pid")  # written by `sentinel eval extract` while it runs
 
 
 def system_busy(stat: Path = Path("/proc/stat")) -> int:
@@ -154,14 +153,46 @@ class QuietRunner:
 
 # --- the real machine ---
 
+EXTRACT_PIDS = Path("data/episodes/.extract")  # one <pid>.pid per running `sentinel eval extract`
 
-def extraction_pid(pidfile: Path = EXTRACT_PIDFILE) -> int | None:
+
+def register_extraction(directory: Path = EXTRACT_PIDS, pid: int | None = None) -> Path:
+    """Announce a running extraction so that the quiet bench can pause it."""
+    pid = os.getpid() if pid is None else pid
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"{pid}.pid"
+    path.write_text(str(pid))
+    return path
+
+
+def unregister_extraction(directory: Path = EXTRACT_PIDS, pid: int | None = None) -> None:
+    (directory / f"{os.getpid() if pid is None else pid}.pid").unlink(missing_ok=True)
+
+
+def _is_extraction(pid: int) -> bool:
+    """The process exists and really is a `sentinel … extract` (a reused PID must never be paused)."""
     try:
-        pid = int(pidfile.read_text().strip())
-        os.kill(pid, 0)
-        return pid
-    except (OSError, ValueError):
-        return None
+        args = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
+    except OSError:
+        return False
+    text = b" ".join(args).decode(errors="replace")
+    return "sentinel" in text and "extract" in text
+
+
+def extraction_pids(directory: Path = EXTRACT_PIDS) -> list[int]:
+    """Live extraction processes; files of processes that are gone or are something else are removed."""
+    pids = []
+    for path in sorted(directory.glob("*.pid")) if directory.exists() else []:
+        try:
+            pid = int(path.read_text().strip())
+        except (OSError, ValueError):
+            path.unlink(missing_ok=True)
+            continue
+        if _is_extraction(pid):
+            pids.append(pid)
+        else:
+            path.unlink(missing_ok=True)
+    return pids
 
 
 def foreign_load(own: Callable[[], set[int]]) -> float:
@@ -169,13 +200,13 @@ def foreign_load(own: Callable[[], set[int]]) -> float:
     return max(0, system_busy() - own_busy_threads(own()))
 
 
-def pause_extraction() -> None:
-    if (pid := extraction_pid()) is not None:
+def pause_extraction(directory: Path = EXTRACT_PIDS) -> None:
+    for pid in extraction_pids(directory):
         os.kill(pid, signal.SIGSTOP)
 
 
-def resume_extraction() -> None:
-    if (pid := extraction_pid()) is not None:
+def resume_extraction(directory: Path = EXTRACT_PIDS) -> None:
+    for pid in extraction_pids(directory):
         os.kill(pid, signal.SIGCONT)
 
 

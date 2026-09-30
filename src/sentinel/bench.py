@@ -757,7 +757,7 @@ def run_quiet_bench(
     from sentinel.models import export_openvino
     from sentinel.quiet import (
         QuietRunner,
-        extraction_pid,
+        extraction_pids,
         foreign_load,
         machine_load_average,
         pause_extraction,
@@ -774,7 +774,7 @@ def run_quiet_bench(
     jsonl = out.with_suffix(".jsonl")
 
     def own() -> set[int]:
-        return {os.getpid()} | ({pid} if (pid := extraction_pid()) is not None else set())
+        return {os.getpid(), *extraction_pids()}
 
     def measure(combo: tuple, during: Callable[[], None]) -> dict:
         backend, people_variant, weapon_variant = combo

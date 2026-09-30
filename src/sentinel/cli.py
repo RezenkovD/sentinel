@@ -87,7 +87,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    import signal
+    import sys
+
     args = build_parser().parse_args(argv)
+    # `systemctl stop` / `docker stop` send SIGTERM: turn it into SystemExit so that every `finally` runs
+    # (a paused extraction is resumed, open incidents are closed, pid files are removed)
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     if args.command == "eval":
         module, script_argv = eval_command(args.name, args.rest, args.config)
         result = importlib.import_module(module).main(script_argv)

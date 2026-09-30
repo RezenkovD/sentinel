@@ -108,3 +108,31 @@ def test_no_measurement_on_battery_or_without_the_performance_profile():
         runner = _runner(lambda t: 0.0, measured, events, clock, ac=ac, profile=profile)
         rows = runner.run(["a"], deadline_s=1000)
         assert rows == [] and measured == []
+
+
+def test_only_live_extraction_processes_are_paused(tmp_path: Path):
+    import subprocess
+    import sys
+
+    from sentinel.quiet import extraction_pids, pause_extraction, register_extraction, resume_extraction
+
+    extraction = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)", "sentinel", "eval", "extract"]
+    )
+    other = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    try:
+        register_extraction(tmp_path, extraction.pid)
+        register_extraction(tmp_path, other.pid)  # e.g. a PID reused by another program after a reboot
+        (tmp_path / "999999999.pid").write_text("999999999")  # a process that is gone
+        assert extraction_pids(tmp_path) == [extraction.pid]
+        assert sorted(p.name for p in tmp_path.iterdir()) == [f"{extraction.pid}.pid"]  # stale files cleaned
+        pause_extraction(tmp_path)
+        state = Path(f"/proc/{extraction.pid}/stat").read_text().split(")")[1].split()[0]
+        assert state == "T"
+        resume_extraction(tmp_path)
+        state = Path(f"/proc/{extraction.pid}/stat").read_text().split(")")[1].split()[0]
+        assert state != "T"
+        assert Path(f"/proc/{other.pid}/stat").read_text().split(")")[1].split()[0] != "T"
+    finally:
+        extraction.kill()
+        other.kill()

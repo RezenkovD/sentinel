@@ -21,6 +21,7 @@ import math
 import os
 import random
 import re
+import sys
 import time
 import xml.etree.ElementTree as ET
 from collections.abc import Callable, Iterator
@@ -154,18 +155,37 @@ def _labels_of(episode: Episode, scene: SceneDescription, frame_times: list[floa
     return None
 
 
-def extract_episode(episode: Episode, perception, out: Path, meta: dict) -> bool:
-    """Run perception over the episode and write its file; False if an identical file already exists."""
+def _read_meta(path: Path) -> dict | None:
+    """Meta of an episode file, or None if the file is unreadable (e.g. cut short by a power loss)."""
+    try:
+        with path.open(encoding="utf-8") as f:
+            return json.loads(f.readline())["meta"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def is_current(path: Path, meta: dict) -> bool:
+    """The file exists and was made by this very perception."""
+    existing = _read_meta(path) if path.exists() else None
+    return existing is not None and all(
+        existing.get(k) == meta[k] for k in ("perception_version", "perception_hash")
+    )
+
+
+def extract_episode(episode: Episode, perception, out: Path, meta: dict, redo: bool = False) -> bool:
+    """Run perception over the episode and write its file; False if a file of this perception exists.
+
+    A file of another perception is an error unless `redo`; an unreadable file is simply made again.
+    """
     if out.exists():
-        with out.open(encoding="utf-8") as f:
-            existing = json.loads(f.readline())["meta"]
-        same = ("perception_version", "perception_hash")
-        if all(existing.get(k) == meta[k] for k in same):
+        if is_current(out, meta):
             return False
-        raise RuntimeError(
-            f"{out} was made by another perception ({existing.get('perception_version')}, "
-            f"{existing.get('perception_hash')}): remove it or run with --redo"
-        )
+        existing = _read_meta(out)
+        if existing is not None and not redo:
+            raise RuntimeError(
+                f"{out} was made by another perception ({existing.get('perception_version')}, "
+                f"{existing.get('perception_hash')}): remove it or run with --redo"
+            )
     perception.reset()
     started = time.perf_counter()
     lines: list[dict] = []
@@ -198,6 +218,8 @@ def extract_episode(episode: Episode, perception, out: Path, meta: dict) -> bool
             for line in lines:
                 record = {"scene": line["scene"].model_dump(mode="json"), "aux": line["aux"]}
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
+            f.flush()
+            os.fsync(f.fileno())  # the data reaches the disk before the rename (a power loss leaves no stub)
         os.replace(tmp, out)
     except BaseException:
         tmp.unlink(missing_ok=True)
@@ -321,6 +343,69 @@ def xd_episodes(subset: Path, videos: Path, annotations: Path, fps: float) -> li
     return episodes
 
 
+def extract_all(
+    episodes: list[Episode], perception, out_dir: Path, meta: dict, redo: bool, log=print
+) -> dict[str, int]:
+    """Extract every episode; one that fails (e.g. an unreadable video) is logged and skipped, not fatal."""
+    counts = {"done": 0, "skipped": 0, "failed": 0}
+    hours = sum(e.duration_s for e in episodes) / 3600
+    done_s, started = 0.0, time.monotonic()
+    for i, episode in enumerate(episodes, 1):
+        out = out_dir / episode.dataset / f"{episode.episode_id}.jsonl"
+        try:
+            made = extract_episode(episode, perception, out, meta, redo=redo)
+            counts["done" if made else "skipped"] += 1
+        except Exception as exc:  # KeyboardInterrupt / SystemExit stop the whole run
+            counts["failed"] += 1
+            log(f"FAILED {episode.dataset}/{episode.episode_id}: {type(exc).__name__}: {exc}")
+        done_s += episode.duration_s
+        if i % 20 == 0 or i == len(episodes):
+            elapsed = time.monotonic() - started
+            eta_h = (hours * 3600 - done_s) * elapsed / done_s / 3600 if done_s else math.nan
+            log(
+                f"{time.strftime('%H:%M:%S')} {episode.dataset} {i}/{len(episodes)}: {done_s / 3600:.2f} of "
+                f"{hours:.2f} h of video in {elapsed / 3600:.2f} h, ETA {eta_h:.1f} h, {counts}"
+            )
+    return counts
+
+
+def stage_meta(cfg: Config) -> dict:
+    """Metadata every episode file of a stage carries: versions, perception hash, weight hashes, libraries."""
+    import importlib.metadata as md
+
+    import numpy as np
+
+    from sentinel.models import sha256
+    from sentinel.pipeline import PERCEPTION_VERSION
+
+    def version(package: str) -> str | None:
+        try:
+            return md.version(package)
+        except md.PackageNotFoundError:
+            return None
+
+    m = cfg.models
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "perception_version": PERCEPTION_VERSION,
+        "perception_hash": perception_hash(cfg),
+        "backend": m.backend,
+        "analysis_fps": cfg.analysis.fps,
+        "weights_sha256": {
+            "people": sha256(m.people.weights),
+            "pose": sha256(m.pose.weights),
+            "weapons": sha256(cfg.weapons.weights),
+        },
+        "versions": {
+            "ultralytics": version("ultralytics"),
+            "openvino": version("openvino"),
+            "torch": version("torch"),
+            "opencv": cv2.__version__,
+            "numpy": np.__version__,
+        },
+    }
+
+
 # --- the command ---
 
 
@@ -382,9 +467,16 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     if not args.plan and not args.dataset:
         parser.error("give --plan all or --dataset")
+    if args.dataset and not args.parts:
+        parser.error("--dataset needs --parts (rwf2000: train val test; us_gun: select test; xd: test)")
+    if args.weapons and args.out == OUT:
+        parser.error("--weapons makes a separate cache: give it its own --out (e.g. data/episodes_crops)")
 
-    from sentinel.quiet import EXTRACT_PIDFILE
+    import signal
 
+    from sentinel.quiet import register_extraction, unregister_extraction
+
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))  # `systemctl stop` still runs the cleanup below
     cores = _limit_cpu(args.threads)
     config = load_config(args.config)
     if args.backend:
@@ -401,15 +493,18 @@ def main(argv: list[str] | None = None) -> None:
             ("xd", ["test"]),
         ]
         if args.plan
-        else [(args.dataset, args.parts or ["test"])]
+        else [(args.dataset, args.parts)]
     )
-    EXTRACT_PIDFILE.parent.mkdir(parents=True, exist_ok=True)
-    EXTRACT_PIDFILE.write_text(str(os.getpid()))
+    register_extraction()
+    failed = 0
     try:
         for dataset, parts in stages:
-            _run_stage(config, dataset, parts, args, cores)
+            failed += _run_stage(config, dataset, parts, args, cores)
     finally:
-        EXTRACT_PIDFILE.unlink(missing_ok=True)
+        unregister_extraction()
+    if failed:
+        print(f"{failed} episodes failed (see FAILED lines above); run the same command again to retry them")
+        raise SystemExit(1)
 
 
 def _episodes(dataset: str, parts: list[str], args, fps: float) -> list[Episode]:
@@ -430,50 +525,34 @@ def _episodes(dataset: str, parts: list[str], args, fps: float) -> list[Episode]
     )
 
 
-def _run_stage(config: Config, dataset: str, parts: list[str], args, cores: list[int]) -> None:
+def _run_stage(config: Config, dataset: str, parts: list[str], args, cores: list[int]) -> int:
+    """Extract one dataset stage; returns the number of failed episodes."""
     import torch
 
     from sentinel.agents.context import ZoneContext
-    from sentinel.pipeline import PERCEPTION_VERSION, Perception, build_agents
+    from sentinel.pipeline import Perception, build_agents
 
     cfg = dataset_config(config, dataset)
     episodes = _episodes(dataset, parts, args, cfg.analysis.fps)
-    meta = {
-        "schema_version": SCHEMA_VERSION,
-        "perception_version": PERCEPTION_VERSION,
-        "perception_hash": perception_hash(cfg),
-        "backend": cfg.models.backend,
-        "analysis_fps": cfg.analysis.fps,
-    }
-    todo = [e for e in episodes if not (args.out / e.dataset / f"{e.episode_id}.jsonl").exists() or args.redo]
+    meta = stage_meta(cfg)
+    todo = [e for e in episodes if not is_current(args.out / e.dataset / f"{e.episode_id}.jsonl", meta)]
     hours = sum(e.duration_s for e in todo) / 3600
     print(
         f"{dataset} {parts}: {len(episodes)} episodes, {len(todo)} to do ({hours:.2f} h of video); "
-        f"cores {cores}; perception {PERCEPTION_VERSION} / {meta['perception_hash']}",
+        f"cores {cores}; perception {meta['perception_version']} / {meta['perception_hash']}",
         flush=True,
     )
     if not todo:
-        return
+        return 0
     zone = ZoneContext.from_yaml(cfg.context.zones).zone_for(cfg.source.camera_id)
     perception = Perception(build_agents(cfg, record_weapons=True), cfg, cfg.source.camera_id, zone)
-    done_s = 0.0
-    started = time.monotonic()
-    for i, episode in enumerate(todo, 1):
-        out = args.out / episode.dataset / f"{episode.episode_id}.jsonl"
-        if args.redo:
-            out.unlink(missing_ok=True)
-        extract_episode(episode, perception, out, meta)
-        if cfg.models.backend == "torch":
-            torch.set_num_threads(len(cores))  # Ultralytics sets 8 threads when its predictor starts
-        done_s += episode.duration_s
-        elapsed = time.monotonic() - started
-        eta_h = (hours * 3600 - done_s) * elapsed / done_s / 3600 if done_s else math.nan
-        if i % 20 == 0 or i == len(todo):
-            print(
-                f"{time.strftime('%H:%M:%S')} {dataset} {i}/{len(todo)}: {done_s / 3600:.2f} of "
-                f"{hours:.2f} h of video in {elapsed / 3600:.2f} h, ETA {eta_h:.1f} h",
-                flush=True,
-            )
+    if cfg.models.backend == "torch":
+        _warm = next(iter(todo[0].frames()))  # Ultralytics sets 8 threads when its predictor starts
+        perception.reset()
+        perception.process(_warm)
+        torch.set_num_threads(len(cores))
+    counts = extract_all(todo, perception, args.out, meta, args.redo, log=lambda m: print(m, flush=True))
+    return counts["failed"]
 
 
 if __name__ == "__main__":
