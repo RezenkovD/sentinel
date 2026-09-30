@@ -278,3 +278,12 @@ def test_risky_argument_combinations_are_refused_before_anything_starts(argv: li
     with pytest.raises(SystemExit):
         main(argv)  # no --parts would silently mean the test part; --weapons without --out mixes caches
     assert os.nice(0) == before  # refused before the process lowered its priority
+
+
+def test_cores_are_the_last_ones_unless_given():
+    from sentinel.eval.extract import pick_cores
+
+    assert pick_cores(list(range(16)), threads=4, cpus=None) == [12, 13, 14, 15]
+    assert pick_cores(list(range(16)), threads=4, cpus=[8, 9, 10, 11]) == [8, 9, 10, 11]
+    with pytest.raises(ValueError):
+        pick_cores(list(range(8)), threads=4, cpus=[8, 9])  # not available to this process

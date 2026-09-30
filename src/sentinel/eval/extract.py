@@ -408,9 +408,19 @@ def dataset_config(config: Config, dataset: str) -> Config:
     )
 
 
-def _limit_cpu(threads: int) -> list[int]:
-    """Pin the process to the last `threads` CPUs (efficiency cores here) and be as polite as possible."""
-    cores = sorted(os.sched_getaffinity(0))[-threads:]
+def pick_cores(available: list[int], threads: int, cpus: list[int] | None) -> list[int]:
+    """The given CPUs, or the last `threads` available ones (the efficiency cores of this laptop)."""
+    if cpus:
+        missing = set(cpus) - set(available)
+        if missing:
+            raise ValueError(f"CPUs {sorted(missing)} are not available to this process")
+        return sorted(cpus)
+    return sorted(available)[-threads:]
+
+
+def _limit_cpu(threads: int, cpus: list[int] | None = None) -> list[int]:
+    """Pin the process to a few CPUs (efficiency cores by default) and be as polite as possible."""
+    cores = pick_cores(sorted(os.sched_getaffinity(0)), threads, cpus)
     os.sched_setaffinity(0, cores)
     os.environ.setdefault("OMP_NUM_THREADS", str(threads))
     os.nice(19)
@@ -430,6 +440,9 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--threads", type=int, default=4, help="CPU cores (and model threads) to use")
+    parser.add_argument(
+        "--cpus", type=int, nargs="+", help="exact CPUs to pin to (default: the last --threads)"
+    )
     parser.add_argument(
         "--backend", choices=["torch", "openvino"], help="default: models.backend of the config"
     )
@@ -453,7 +466,7 @@ def main(argv: list[str] | None = None) -> None:
     from sentinel.quiet import register_extraction, unregister_extraction
 
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))  # `systemctl stop` still runs the cleanup below
-    cores = _limit_cpu(args.threads)
+    cores = _limit_cpu(args.threads, args.cpus)
     config = load_config(args.config)
     if args.backend:
         config = config.model_copy(
