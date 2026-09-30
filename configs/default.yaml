@@ -147,6 +147,10 @@ incidents:                  # incident state machine (SPEC §7)
   blur_faces: true
   output_dir: results/incidents
 
+baselines:                  # SPEC §9: the two baselines of the experiment (session 03, step 6)
+  weapon_conf: 0.30         # detector operating point (Sevilla Cam1+Cam5 frames, session 02); no pose, no confirmation
+  motion_energy: 2.14       # grey levels, largest window of an episode; best episode F1 on our RWF val
+
 bench:
   imgsz: [640, 480, 416]
   fps: [8, 10]

@@ -3,9 +3,10 @@
     uv run sentinel eval baselines
 
 - `baseline_weapon` — as in the bachelor's work: an alarm when a window has a weapon detection scoring at
-  least τ (the best raw score of the window, `aux.weapon_max_conf`); no pose, no confirmation. τ on dev: the
-  largest Sevilla Cam1 + Cam5 window recall with at most 1 % of our RWF train NonFight clips raising an alarm
-  (the same trade-off as the weapon rule of step 5).
+  least τ (the best raw score of the window, `aux.weapon_max_conf`); no pose, no confirmation. τ is the
+  detector's operating point chosen on dev (Sevilla Cam1 + Cam5 frames, session 02: `weapons.conf`); the
+  strict τ (at most 1 % of our RWF train NonFight clips alarming, the trade-off of step 5) is shown next
+  to it.
 - `baseline_motion` — a classic simple violence heuristic: an alarm when a window's `motion_energy` is at
   least τ; the episode score is its largest window value; τ for the best episode F1 on our RWF val.
 """
@@ -17,39 +18,50 @@ from pathlib import Path
 
 import numpy as np
 
+from sentinel.config import DEFAULT_CONFIG, load_config
 from sentinel.eval.cache import OUT_DEFAULT, CachedEpisode, _auc, check_complete, load_episodes
 from sentinel.eval.train_a import f1_threshold
 
 WEAPON_GRID = tuple(round(0.05 * i, 2) for i in range(1, 20))
 
 
+def _weapon_row(sevilla: list[CachedEpisode], normal: list[CachedEpisode], tau: float) -> dict:
+    positive = np.array([a["weapon_max_conf"] for e in sevilla for a in e.aux if a.get("label")])
+    segments = [e for e in sevilla if any(a.get("label") for a in e.aux)]
+    hit = sum(any(a["weapon_max_conf"] >= tau and a.get("label") for a in e.aux) for e in segments)
+    return {
+        "threshold": tau,
+        "window_recall": float((positive >= tau).mean()) if len(positive) else None,
+        "segment_recall": hit / len(segments) if segments else None,
+        "false_alarm_share": float(
+            np.mean([any(a["weapon_max_conf"] >= tau for a in e.aux) for e in normal])
+        ),
+    }
+
+
 def weapon_baseline(
     sevilla: list[CachedEpisode],
     normal: list[CachedEpisode],
+    operating_point: float,
     max_false_alarm: float = 0.01,
     grid: tuple[float, ...] = WEAPON_GRID,
 ) -> dict:
-    """The lowest threshold whose false alarms on normal clips stay within `max_false_alarm`."""
-    windows = [(a["weapon_max_conf"], a.get("label")) for e in sevilla for a in e.aux]
-    positive = np.array([c for c, label in windows if label])
-    rows = []
-    for tau in sorted(grid):
-        segments = [e for e in sevilla if any(a.get("label") for a in e.aux)]
-        hit_segments = sum(
-            any(a["weapon_max_conf"] >= tau and a.get("label") for a in e.aux) for e in segments
-        )
-        false = float(np.mean([any(a["weapon_max_conf"] >= tau for a in e.aux) for e in normal]))
-        rows.append(
-            {
-                "threshold": tau,
-                "window_recall": float((positive >= tau).mean()) if len(positive) else None,
-                "segment_recall": hit_segments / len(segments) if segments else None,
-                "false_alarm_share": false,
-            }
-        )
+    """The detector at its own operating point, plus the strict threshold for comparison.
+
+    The operating point was chosen on Sevilla Cam1 + Cam5 frames (session 02: at most 2 % false frames).
+    The strict threshold — the lowest keeping at most `max_false_alarm` of normal clips quiet, the trade-off
+    of the weapon rule — is reported next to it: on RWF it leaves the plain detector with no recall at all.
+    """
+    rows = [_weapon_row(sevilla, normal, tau) for tau in sorted(set(grid) | {operating_point})]
     allowed = [r for r in rows if r["false_alarm_share"] <= max_false_alarm + 1e-9]
-    best = allowed[0] if allowed else min(rows, key=lambda r: r["false_alarm_share"])
-    return best | {"grid": rows, "normal_clips": len(normal), "max_false_alarm": max_false_alarm}
+    strict = allowed[0] if allowed else min(rows, key=lambda r: r["false_alarm_share"])
+    chosen = next(r for r in rows if r["threshold"] == operating_point)
+    return chosen | {
+        "strict": strict,
+        "grid": rows,
+        "normal_clips": len(normal),
+        "max_false_alarm": max_false_alarm,
+    }
 
 
 def motion_baseline(val: list[CachedEpisode]) -> dict:
@@ -83,7 +95,9 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--episodes", type=Path, default=OUT_DEFAULT)
     parser.add_argument("--out", type=Path, default=Path(f"results/baselines_{date.today().isoformat()}.md"))
     parser.add_argument("--allow-partial", action="store_true", help="run on a cache still being extracted")
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     args = parser.parse_args(argv)
+    config = load_config(args.config)
     sevilla = load_episodes(args.episodes, "us_gun", ["select"])
     train = load_episodes(args.episodes, "rwf2000", ["train"])
     val = load_episodes(args.episodes, "rwf2000", ["val"])
@@ -94,23 +108,21 @@ def main(argv: list[str] | None = None) -> None:
     ):
         check_complete(episodes, dataset, [part], allow_partial=args.allow_partial)
     normal = [e for e in train if e.label == 0]
-    weapon = weapon_baseline(sevilla, normal)
+    weapon = weapon_baseline(sevilla, normal, operating_point=config.weapons.conf)
     motion = motion_baseline(val)
     lines = [
         f"# Базові методи на кеші — {date.today().isoformat()}",
         "",
         "## baseline_weapon (детекція зброї з порогом, як у бакалаврській)",
         "",
-        (
-            f"- Поріг τ = {_fmt(weapon['threshold'])}: найменший, за якого NonFight нашого train RWF "
-            f"дають ≤ 1 % кліпів із тривогою (усього {weapon['normal_clips']} кліпів)."
-            if weapon["false_alarm_share"] <= weapon["max_false_alarm"] + 1e-9
-            else f"- Жоден поріг сітки не дає ≤ 1 % хибних тривог; τ = {_fmt(weapon['threshold'])} — з "
-            f"найменшою часткою хибних ({weapon['false_alarm_share']:.1%} з {weapon['normal_clips']} кліпів)."
-        ),
-        f"- Севілья Cam1 + Cam5: повнота вікон {_fmt(weapon['window_recall'])}, сегментів "
-        f"{_fmt(weapon['segment_recall'])}; хибні тривоги на NonFight train: "
-        f"{weapon['false_alarm_share']:.1%}.",
+        f"- Поріг τ = {_fmt(weapon['threshold'])} — робоча точка детектора, обрана на кадрах Севільї "
+        "Cam1 + Cam5 (сесія 02: ≤ 2 % хибних кадрів).",
+        f"- За неї: Севілья Cam1 + Cam5 — повнота вікон {_fmt(weapon['window_recall'])}, сегментів "
+        f"{_fmt(weapon['segment_recall'])}; NonFight нашого train RWF з тривогою — "
+        f"{weapon['false_alarm_share']:.1%} з {weapon['normal_clips']}.",
+        f"- Строгий τ (≤ 1 % NonFight з тривогою, як для правила зброї) — "
+        f"{_fmt(weapon['strict']['threshold'])}: повнота вікон {_fmt(weapon['strict']['window_recall'])}, "
+        f"сегментів {_fmt(weapon['strict']['segment_recall'])}.",
         "",
         "| τ | Повнота вікон Севільї | Повнота сегментів | NonFight train з тривогою |",
         "|---|---|---|---|",

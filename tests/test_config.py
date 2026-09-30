@@ -49,3 +49,8 @@ def test_more_than_five_pairs_is_rejected_at_load_time(tmp_path: Path):
     path.write_text(text)
     with pytest.raises(ValidationError):
         load_config(path)
+
+
+def test_baseline_thresholds_come_from_the_config():
+    baselines = load_config(DEFAULT).baselines
+    assert baselines.weapon_conf == 0.30 and baselines.motion_energy == 2.14

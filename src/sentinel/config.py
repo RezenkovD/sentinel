@@ -150,6 +150,11 @@ class QuietConfig(_Section):
     span_s: float = Field(gt=0)  # length of the rolling mean
 
 
+class BaselinesConfig(_Section):
+    weapon_conf: float = Field(ge=0, le=1)  # baseline_weapon: a window alarms with a weapon score >= this
+    motion_energy: float = Field(ge=0)  # baseline_motion: an episode alarms when a window's energy >= this
+
+
 class BenchConfig(_Section):
     imgsz: list[int]
     fps: list[float]
@@ -168,6 +173,7 @@ class Config(_Section):
     context: ContextConfig
     aggregator_a: AggregatorAConfig
     incidents: IncidentsConfig
+    baselines: BaselinesConfig
     bench: BenchConfig
 
 
