@@ -14,7 +14,8 @@ models:
   imgsz: 480              # people + pose input size (decision 29.09, docs/DECISIONS.md)
   threads: null           # torch intra-op threads; null = leave the Ultralytics default (8)
   people:
-    weights: weights/yolo26n.pt
+    source: detect        # detect: detector + ByteTrack, skeletons matched to tracks | pose: the pose model is tracked
+    weights: weights/yolo26n.pt  # detector, used with source: detect
     conf: 0.1             # low on purpose: ByteTrack also uses low-score boxes (Ultralytics track default)
     tracker: configs/bytetrack.yaml
   pose:

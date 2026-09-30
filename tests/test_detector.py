@@ -5,7 +5,7 @@ import sys
 import numpy as np
 import pytest
 
-from sentinel.agents.detector import PersonTracker, Track, tracks_from_arrays
+from sentinel.agents.detector import PersonTracker, PoseTracker, Track, pose_tracks, tracks_from_arrays
 from sentinel.agents.pose_features import MatchRules, PoseEstimator
 
 
@@ -42,3 +42,29 @@ def test_missing_weights_fail_fast_instead_of_being_downloaded(tmp_path):
     with pytest.raises(FileNotFoundError):
         PoseEstimator(tmp_path / "yolo11n-pose.pt", imgsz=640, conf=0.25, rules=rules)
     assert not missing.exists()
+
+
+def _kps(x: float) -> np.ndarray:
+    k = np.zeros((17, 3))
+    k[:, 0], k[:, 2] = x, 0.9
+    return k
+
+
+def test_pose_source_gives_tracks_and_their_skeletons_from_one_model():
+    xyxy = np.array([[10.0, 20.0, 50.0, 120.0], [200.0, 30.0, 260.0, 180.0]])
+    kps = np.stack([_kps(30.0), _kps(230.0)])
+    tracks, skeletons, people = pose_tracks(xyxy, np.array([4.0, 9.0]), np.array([0.8, 0.6]), kps)
+    assert [t.track_id for t in tracks] == [4, 9]
+    assert skeletons[4][0, 0] == 30.0 and skeletons[9][0, 0] == 230.0
+    assert len(people) == 2 and people[1][0] == (200.0, 30.0, 260.0, 180.0)
+
+
+def test_pose_source_without_confirmed_tracks_still_reports_people_for_blurring():
+    xyxy = np.array([[10.0, 20.0, 50.0, 120.0]])
+    tracks, skeletons, people = pose_tracks(xyxy, None, np.array([0.3]), np.stack([_kps(30.0)]))
+    assert tracks == [] and skeletons == {} and len(people) == 1
+
+
+def test_pose_tracker_needs_its_weights(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        PoseTracker(tmp_path / "yolo26n-pose.pt", imgsz=480, conf=0.1, tracker="bytetrack.yaml")

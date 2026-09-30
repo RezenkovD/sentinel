@@ -215,27 +215,34 @@ def model_files(config: Config) -> dict[str, Path]:
     return {role: resolve_weights(path, m.backend) for role, path in paths.items()}
 
 
+def people_agents(config: Config, files: dict[str, Path], device: str) -> tuple[Any, Any]:
+    """People and pose agents: a detector + a pose model matched to its tracks, or one tracked pose model."""
+    from sentinel.agents.detector import PersonTracker, PoseTracker
+    from sentinel.agents.pose_features import MatchRules, PoseEstimator
+
+    m, pose = config.models, config.models.pose
+    if m.people.source == "pose":
+        tracker = PoseTracker(files["pose"], m.imgsz, m.people.conf, m.people.tracker, device)
+        return tracker, tracker
+    people = PersonTracker(files["people"], m.imgsz, m.people.conf, m.people.tracker, device)
+    rules = MatchRules(pose.min_iou, pose.min_inside, pose.keypoint_conf, pose.box_margin)
+    return people, PoseEstimator(files["pose"], m.imgsz, pose.conf, rules, device)
+
+
 def build_pipeline(
     config: Config, source_id: str, run_id: str, journal: Path | None, notifier: Notifier
 ) -> Pipeline:
     """The real pipeline: YOLO people + ByteTrack, YOLO-pose, weapon detector, aggregator A, key frames."""
-    from sentinel.agents.detector import PersonTracker
-    from sentinel.agents.pose_features import MatchRules, PoseEstimator
     from sentinel.agents.weapons import WeaponDetector
     from sentinel.aggregators.rules import RulesAggregator
     from sentinel.keyframe import KeyframeWriter
 
-    m, w, pose = config.models, config.weapons, config.models.pose
+    m, w = config.models, config.weapons
     files, device = model_files(config), m.runtime_device
+    people, poser = people_agents(config, files, device)
     agents = Agents(
-        people=PersonTracker(files["people"], m.imgsz, m.people.conf, m.people.tracker, device),
-        poser=PoseEstimator(
-            files["pose"],
-            m.imgsz,
-            pose.conf,
-            MatchRules(pose.min_iou, pose.min_inside, pose.keypoint_conf, pose.box_margin),
-            device,
-        ),
+        people=people,
+        poser=poser,
         weapons=WeaponDetector.from_weights(
             files["weapons"], w.imgsz, w.conf, w.every_n_frames, w.class_map, w.mode, w.crop_pad, device
         ),

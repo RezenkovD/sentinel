@@ -26,7 +26,8 @@ class AnalysisConfig(_Section):
 
 
 class PeopleModelConfig(_Section):
-    weights: Path
+    source: Literal["detect", "pose"]  # pose: the pose model is tracked itself, no separate detector
+    weights: Path  # the detector (source: detect)
     conf: float = Field(ge=0, le=1)
     tracker: str
 
