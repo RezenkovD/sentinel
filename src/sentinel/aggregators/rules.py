@@ -160,9 +160,28 @@ def _reason(name: str, x: dict[str, float], scene: SceneDescription) -> str | No
 
 
 def make_aggregator(config: Config) -> "RulesAggregator":
-    """The trained A named in the config, or the hand-set weights when none is set."""
+    """The trained A named in the config, or the hand-set weights when none is set.
+
+    A model trained on scenes of another perception (e.g. the OpenVINO cache while `sentinel run` uses torch)
+    still loads, with a warning: its inputs may differ slightly from the ones it was fitted on.
+    """
+    import sys
+
     model = config.aggregator_a.model
-    return RulesAggregator.from_config(config) if model is None else RulesAggregator.load(model, config)
+    if model is None:
+        return RulesAggregator.from_config(config)
+    trained_on = json.loads(Path(model).read_text(encoding="utf-8")).get("perception_hash")
+    if trained_on is not None:
+        from sentinel.pipeline import perception_hash
+
+        running = perception_hash(config)
+        if running != trained_on:
+            print(
+                f"warning: A ({model}) was trained on perception {trained_on}, this run's perception is "
+                f"{running} (backend, weights or settings differ)",
+                file=sys.stderr,
+            )
+    return RulesAggregator.load(model, config)
 
 
 class RulesAggregator:

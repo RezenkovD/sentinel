@@ -30,6 +30,32 @@ from sentinel.schema import RiskResult, SceneDescription, Zone
 PERCEPTION_VERSION = "3.0"
 
 
+def perception_hash(config: Config) -> str:
+    """Hash of everything that shapes the scene descriptions: perception settings, zone and tracker files,
+    model checkpoints, schema version. Aggregator and incident settings are downstream and not included."""
+    import hashlib
+
+    from sentinel.models import sha256
+    from sentinel.schema import SCHEMA_VERSION
+
+    dump = config.model_dump(mode="json")
+    settings = {k: dump[k] for k in ("analysis", "models", "weapons", "features", "motion", "context")}
+    m = config.models
+    files = [
+        m.people.weights,
+        m.pose.weights,
+        config.weapons.weights,
+        Path(m.people.tracker),
+        config.context.zones,
+    ]
+    digest = {
+        "schema_version": SCHEMA_VERSION,
+        "settings": settings,
+        "files": {str(p): sha256(Path(p)) for p in files},
+    }
+    return hashlib.sha256(json.dumps(digest, sort_keys=True).encode()).hexdigest()[:16]
+
+
 class Aggregator(Protocol):
     def assess(self, scene: SceneDescription) -> RiskResult: ...
 

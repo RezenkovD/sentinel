@@ -277,3 +277,17 @@ def test_weapon_alarm_explanation_names_the_weapon_first():
     scene = _scene(persons=[_person(1, speed=2.5, accel=30.0, holds="gun"), _person(2)])
     result = a.assess(scene)
     assert result.level == "alarm" and result.reason_uk.startswith("Зброя в руці: вогнепальна зброя")
+
+
+def test_running_a_model_on_another_perception_is_reported(tmp_path: Path, capsys):
+    from sentinel.aggregators.rules import make_aggregator
+
+    path = tmp_path / "a.json"
+    RulesAggregator.from_config(CONFIG).save(
+        path, extra={"perception_version": "3.0", "perception_hash": "0" * 16}
+    )
+    config = CONFIG.model_copy(
+        update={"aggregator_a": CONFIG.aggregator_a.model_copy(update={"model": path})}
+    )
+    make_aggregator(config)
+    assert "perception" in capsys.readouterr().err

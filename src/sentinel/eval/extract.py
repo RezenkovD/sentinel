@@ -32,6 +32,7 @@ from pathlib import Path
 import cv2
 
 from sentinel.config import DEFAULT_CONFIG, Config, load_config
+from sentinel.pipeline import perception_hash  # noqa: F401  (re-exported: the cache's key)
 from sentinel.schema import SCHEMA_VERSION, SceneDescription
 
 OUT = Path("data/episodes")
@@ -117,31 +118,6 @@ def sevilla_frames(images: Path, segment: str) -> list[tuple[float, Path, int]]:
 
 
 # --- perception settings ---
-
-
-def perception_hash(config: Config) -> str:
-    """Hash of everything that shapes the scene descriptions: perception settings, zone and tracker files,
-    model checkpoints, schema version. Aggregator and incident settings are downstream and not included."""
-    from sentinel.models import sha256
-
-    dump = config.model_dump(mode="json")
-    settings = {k: dump[k] for k in ("analysis", "models", "weapons", "features", "motion", "context")}
-    m = config.models
-    files = [
-        m.people.weights,
-        m.pose.weights,
-        config.weapons.weights,
-        Path(m.people.tracker),
-        config.context.zones,
-    ]
-    digest = {
-        "schema_version": SCHEMA_VERSION,
-        "settings": settings,
-        "files": {str(p): sha256(Path(p)) for p in files},
-    }
-    import hashlib
-
-    return hashlib.sha256(json.dumps(digest, sort_keys=True).encode()).hexdigest()[:16]
 
 
 # --- writing ---
