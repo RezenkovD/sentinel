@@ -6,6 +6,8 @@ weights/
 results/
 cache/
 .env
+.env*
+!.env.example
 .venv/
 *.pt
 *_openvino_model/
