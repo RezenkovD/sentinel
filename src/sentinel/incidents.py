@@ -123,7 +123,7 @@ class IncidentManager:
         self._high: deque[bool] = deque(maxlen=cfg.n)
         # (risk, snapshot) of the last n windows since ATTENTION began: bounded, so a long ATTENTION spell
         # neither piles up full-resolution frames nor offers a stale key frame
-        self._candidates: deque[tuple[float, Any]] = deque(maxlen=cfg.n)
+        self._candidates: deque[tuple[float, Any, set[int]]] = deque(maxlen=cfg.n)  # risk, frame, its people
         self._incident: Incident | None = None
         self._last: Incident | None = None
         self._quiet_since: float | None = None
@@ -153,13 +153,13 @@ class IncidentManager:
         if self.state is State.NORMAL:
             if held or high:
                 self._candidates.clear()
-                self._candidates.append((r, snapshot))
+                self._candidates.append((r, snapshot, participants(scene)))
                 if held:
                     events += self._alarm(t, risk, scene, snapshot)
                 else:
                     self.state = State.ATTENTION
         elif self.state is State.ATTENTION:
-            self._candidates.append((r, snapshot))
+            self._candidates.append((r, snapshot, participants(scene)))
             if held or sum(self._high) >= cfg.k:
                 events += self._alarm(t, risk, scene, snapshot)
             elif r < cfg.theta_low:
@@ -194,7 +194,9 @@ class IncidentManager:
         self._quiet_since = None
         people = participants(scene)
         held = self._weapon_confirmed_now
-        best_risk, best_snapshot = max(self._candidates or [(risk.risk, snapshot)], key=lambda c: c[0])
+        best_risk, best_snapshot, best_people = max(
+            self._candidates or [(risk.risk, snapshot, people)], key=lambda c: c[0]
+        )
         self._candidates.clear()
         last = self._last
         if last is not None and last.closed_at is not None and self._joins(last, people, t):
@@ -238,7 +240,7 @@ class IncidentManager:
             incident.suppressed = True
             return [self._summary_event(t, risk)]
         self._opens.append(t)
-        incident.keyframe = self.save_keyframe(incident_id, "keyframe", best_snapshot, highlight=people)
+        incident.keyframe = self.save_keyframe(incident_id, "keyframe", best_snapshot, highlight=best_people)
         return [self._event("open", incident, t, keyframe=incident.keyframe)]
 
     def _continue(

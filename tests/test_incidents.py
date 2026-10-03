@@ -255,3 +255,28 @@ def test_people_count_is_the_most_at_once_not_every_track_id_ever_seen():
         events += manager.on_window(t, _risk(r), _scene(t, ids), snapshot=None)
     close = [e for e in events if e.kind == "close"][0]
     assert close.people == 2 and len(close.participants) > 2
+
+
+def test_the_key_frame_highlights_the_participants_of_its_own_window():
+    """The frame shown is the riskiest of the last windows: it highlights the people of that window."""
+    manager, keyframes = FakeKeyframesManager()
+    manager.on_window(1.0, _risk(0.7), _scene(1.0, ids=(1, 2)), snapshot="frame-a")
+    manager.on_window(2.0, _risk(0.95), _scene(2.0, ids=(5, 6)), snapshot="frame-b")  # the riskiest
+    manager.on_window(3.0, _risk(0.7), _scene(3.0, ids=(1, 2)), snapshot="frame-c")
+    (call,) = keyframes.calls
+    assert call == ("keyframe", "frame-b", {5, 6})
+
+
+def FakeKeyframesManager():
+    calls = []
+
+    class Saver:
+        def __init__(self) -> None:
+            self.calls = calls
+
+        def __call__(self, incident_id, name, snapshot, highlight=None):
+            calls.append((name, snapshot, set(highlight or ())))
+            return Path(f"/fake/{name}.jpg")
+
+    saver = Saver()
+    return IncidentManager(BASE, "cam-1", saver, "run"), saver
