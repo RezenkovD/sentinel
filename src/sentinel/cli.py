@@ -23,6 +23,7 @@ EVAL_COMMANDS = {
     "fsm-tune": ("fsm_tune", True),
     "reference-stats": ("reference_stats", False),
     "b-pilot": ("b_pilot", True),
+    "cascade-grid": ("cascade_grid", True),
 }
 
 
