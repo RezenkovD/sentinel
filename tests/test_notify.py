@@ -93,7 +93,9 @@ def test_opening_sends_one_photo_with_a_ukrainian_caption_per_chat(tmp_path: Pat
         ("sendPhoto", "43", True),
     ]
     caption = session.calls[0][1]["caption"]
-    assert "ТРИВОГА" in caption and "зблизилися до 0,4 зросту" in caption and "0,82" in caption
+    assert (
+        "Ймовірна бійка" in caption and "зблизилися до 0,4 зросту" in caption and "Оцінка: помірна" in caption
+    )
 
 
 def test_updates_edit_the_same_message_at_most_every_ten_seconds(tmp_path: Path):
@@ -107,11 +109,11 @@ def test_updates_edit_the_same_message_at_most_every_ten_seconds(tmp_path: Path)
     tg.handle(_event("update", t=23.0, max_risk=0.95))  # too soon: kept for later
     tg.send_due_edits()
     edits = [d for m, d, _ in session.calls if m == "editMessageCaption"]
-    assert len(edits) == 1 and edits[0]["message_id"] == message_id and "0,9" in edits[0]["caption"]
+    assert len(edits) == 1 and edits[0]["message_id"] == message_id and "триває 17 с" in edits[0]["caption"]
     clock.now = 21.5
     tg.send_due_edits()
     edits = [d for m, d, _ in session.calls if m == "editMessageCaption"]
-    assert len(edits) == 2 and "0,95" in edits[1]["caption"]
+    assert len(edits) == 2 and "триває 20 с" in edits[1]["caption"]
 
 
 def test_escalation_replies_with_a_new_photo_for_a_push_notification(tmp_path: Path):
@@ -165,7 +167,7 @@ def test_console_notifier_prints_and_logs_every_event(tmp_path: Path, capsys):
     console.on_event(_event("close", t=45.0))
     console.close()
     printed = capsys.readouterr().out
-    assert "ТРИВОГА" in printed and "Завершено" in printed
+    assert "Ймовірна бійка" in printed and "Завершено" in printed
     rows = [json.loads(line) for line in log.read_text().splitlines()]
     assert [r["kind"] for r in rows] == ["open", "close"] and rows[0]["keyframe"].endswith("k.jpg")
 
@@ -232,3 +234,23 @@ def test_mute_holds_back_new_messages_but_not_the_closing_of_open_ones(tmp_path:
     clock.now = 700.0  # the mute is over
     tg.handle(_event("open", incident_id="r-cam-1-003"))
     assert [m for m, _, _ in session.calls][-1] == "sendMessage"
+
+
+def test_the_caption_reads_like_an_operator_message():
+    """Decision 03.10 (Dmytro): what happened, where, wall-clock time, how long, how many people, why in plain
+    words, how sure and who decided — no track-id sums, no video offsets."""
+    from sentinel.notify import caption
+
+    origin = time.mktime((2026, 10, 3, 14, 32, 0, 0, 0, -1))  # the run started at 14:32:00
+    opened = caption(_event("open", t=5.0, duration_s=0.0, decided_by="B"), place="Вхід", origin=origin)
+    lines = opened.splitlines()
+    assert lines[0] == "🔴 Ймовірна бійка — Вхід"
+    assert lines[1] == "14:32:05 · ≈ 2 людей"
+    assert lines[2] == "Двоє людей зблизилися до 0,4 зросту; різкі рухи рук"
+    assert lines[3] == "Оцінка: помірна · рішення: B"
+    ongoing = caption(_event("update", t=25.0, max_risk=0.95), place="Вхід", origin=origin)
+    assert ongoing.splitlines()[1] == "14:32:25 · триває 22 с · ≈ 2 людей" and "висока" in ongoing
+    armed = caption(_event("open", weapon=True), place="Вхід", origin=origin)
+    assert armed.startswith("🔴 Зброя в руці — Вхід")
+    closed = caption(_event("close", t=45.0), place="Вхід", origin=origin)
+    assert closed.splitlines()[0] == "✅ Завершено о 14:32:45 (42 с) — Вхід"

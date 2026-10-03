@@ -60,6 +60,8 @@ class IncidentEvent:
     suppressed: int = 0  # summary: incidents folded in during the current minute
     stream_ended: bool = False  # closed because the video / camera stream ended, not by calm
     people: int = 0  # most people involved at once (track ids pile up when the tracker renumbers)
+    weapon: bool = False  # the incident was raised or escalated by a confirmed weapon
+    decided_by: str = "A"  # where the risk of the window behind this event came from (A or B)
 
 
 @dataclass
@@ -129,11 +131,18 @@ class IncidentManager:
         self._summary: tuple[str, float, int] | None = None  # id, minute start, suppressed count
         self._count = 0
         self.last_incident_id: str | None = None
+        self._decided_by = "A"
 
     def on_window(
-        self, t: float, risk: RiskResult, scene: SceneDescription, snapshot: Any = None
+        self,
+        t: float,
+        risk: RiskResult,
+        scene: SceneDescription,
+        snapshot: Any = None,
+        decided_by: str = "A",
     ) -> list[IncidentEvent]:
         cfg = self.cfg
+        self._decided_by = decided_by
         r = risk.risk
         held = self._weapon_confirmed(scene)
         high = r >= cfg.theta_high
@@ -338,4 +347,6 @@ class IncidentManager:
             merged=merged,
             stream_ended=stream_ended,
             people=incident.people,
+            weapon=incident.weapon,
+            decided_by=self._decided_by,
         )

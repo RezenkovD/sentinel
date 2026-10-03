@@ -36,8 +36,11 @@ class TelegramNotifier:
         timeout_s: float = 10.0,
         max_wait_s: float = 60.0,
         start_worker: bool = True,
+        place: str = "Камера",
+        origin: float | None = None,  # wall-clock start of the run (epoch s): captions show the time of day
     ) -> None:
         self._token = token
+        self.place, self.origin = place, origin
         self.chat_ids = chat_ids
         self._session = session or requests.Session()
         self._clock, self._sleep = clock, sleep
@@ -56,6 +59,9 @@ class TelegramNotifier:
 
     def __repr__(self) -> str:
         return f"TelegramNotifier(chats={self.chat_ids})"
+
+    def _caption(self, event: IncidentEvent) -> str:
+        return caption(event, self.place, self.origin)
 
     def mute(self, seconds: float) -> None:
         """No new incident messages and no escalation pushes for `seconds`; captions of messages already sent
@@ -92,13 +98,13 @@ class TelegramNotifier:
     # --- message logic (synchronous; the worker thread calls it) ---
 
     def handle(self, event: IncidentEvent) -> None:
-        text = caption(event)
+        text = self._caption(event)
         if self.muted():
             if event.kind in ("open", "summary") or not self._messages.get(event.incident_id):
                 log.info("telegram: muted, %s %s not sent", event.kind, event.incident_id)
                 return
             if event.kind == "escalate" or event.merged:  # no push: only the caption of the existing message
-                self._edit(event.incident_id, caption(_as_update(event)))
+                self._edit(event.incident_id, self._caption(_as_update(event)))
                 return
         if event.kind == "open" or not self._messages.get(event.incident_id):
             # the opening message (or a new one if sending the opening failed: the incident must not be lost)
@@ -106,7 +112,7 @@ class TelegramNotifier:
         elif event.kind == "escalate" or (event.kind == "update" and event.merged):
             for chat, mid in self._messages[event.incident_id].items():
                 self._send(chat, text, event.keyframe, reply_to=mid)
-            self._edit(event.incident_id, caption(_as_update(event)))
+            self._edit(event.incident_id, self._caption(_as_update(event)))
         elif event.kind == "update":
             self._edit(event.incident_id, text)
         elif event.kind == "close":

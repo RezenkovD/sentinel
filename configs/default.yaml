@@ -3,6 +3,7 @@
 source:
   mode: live              # live (camera / RTSP) | paced (file at real speed) | offline (file, no pauses)
   camera_id: cam-1        # goes into window.source of the scene description
+  label: Камера 1         # the camera's name in Telegram messages (e.g. "Вхід")
 
 analysis:
   fps: 10                 # fixed analysis rate, frames/s (not the camera rate); SPEC §6: 8–10

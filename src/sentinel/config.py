@@ -18,6 +18,7 @@ class _Section(BaseModel):
 class SourceConfig(_Section):
     mode: Literal["live", "paced", "offline"]
     camera_id: str
+    label: str = "Камера 1"  # how the operator calls this camera in notifications
 
 
 class AnalysisConfig(_Section):

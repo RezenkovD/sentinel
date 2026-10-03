@@ -263,7 +263,9 @@ class Pipeline:
     def _close_window(self, scene: SceneDescription) -> list[IncidentEvent]:
         started = time.perf_counter()
         risk, decision = self.decider.decide(scene, self.incidents.state)
-        events = self.incidents.on_window(scene.window.t_end, risk, scene, self._window.snapshot)
+        events = self.incidents.on_window(
+            scene.window.t_end, risk, scene, self._window.snapshot, decided_by=decision["source"]
+        )
         decision_ms = _ms_since(started)
         for event in events:
             self.notifier.on_event(event)
@@ -457,7 +459,13 @@ def run_source(config: Config, source: str, paced: bool, results: Path = Path("r
     run_id = time.strftime("%Y%m%d-%H%M%S")
     live = source.isdigit() or "://" in source
     mode = "live" if live else "paced" if paced else "offline"
-    notifier = make_notifier(os.environ, config.notify.incidents_jsonl, config.notify.edit_interval_s)
+    notifier = make_notifier(
+        os.environ,
+        config.notify.incidents_jsonl,
+        config.notify.edit_interval_s,
+        place=config.source.label,
+        origin=time.time(),
+    )
     print(f"notifications: {type(notifier).__name__}", file=sys.stderr)
     journal = results / f"run_{run_id}.jsonl"
     pipeline = build_pipeline(config, config.source.camera_id, run_id, journal, notifier)
