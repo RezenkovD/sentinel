@@ -254,3 +254,15 @@ def test_the_caption_reads_like_an_operator_message():
     assert armed.startswith("🔴 Зброя в руці — Вхід")
     closed = caption(_event("close", t=45.0), place="Вхід", origin=origin)
     assert closed.splitlines()[0] == "✅ Завершено о 14:32:45 (42 с) — Вхід"
+
+
+def test_an_update_with_a_new_frame_replaces_the_photo_and_the_caption(tmp_path: Path):
+    session, clock = FakeSession(), FakeClock()
+    tg = _telegram(session, clock)
+    tg.handle(_event("open", keyframe=_photo(tmp_path)))
+    clock.now = 11.0
+    tg.handle(_event("update", t=20.0, keyframe=_photo(tmp_path)))
+    method, data, photo = session.calls[-1]
+    media = json.loads(data["media"])
+    assert method == "editMessageMedia" and photo and media["type"] == "photo"
+    assert media["media"] == "attach://photo" and "триває 17 с" in media["caption"]

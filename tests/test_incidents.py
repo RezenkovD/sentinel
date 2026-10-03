@@ -201,6 +201,15 @@ def test_updates_come_at_most_every_update_interval():
     assert updates == [13.0, 23.0]  # opened at t = 3
 
 
+def test_an_update_brings_a_fresh_key_frame():
+    """Decision 03.10 (Dmytro): when the message is updated, the photo is updated too."""
+    manager, keyframes = _manager()
+    events = _feed(manager, [0.7] * 15)
+    update = next(e for e in events if e.kind == "update")
+    assert update.keyframe is not None and keyframes.saved[-1][1] == "update_1"
+    assert keyframes.saved[-1][2] == f"frame@{update.t}"  # the frame of the window that sent the update
+
+
 def test_too_many_new_incidents_per_minute_are_folded_into_a_summary():
     manager, _ = _manager(quiet_s=1.0, merge_after_close_s=0.0, max_new_per_minute=2)
     events = []

@@ -78,6 +78,7 @@ class Incident:
     suppressed: bool = False
     closed_at: float | None = None
     escalations: int = 0
+    updates: int = 0
     reopenings: int = 0
     extra: dict = field(default_factory=dict)
 
@@ -258,7 +259,9 @@ class IncidentManager:
             return [self._event("escalate", incident, t, keyframe=path)]
         if t - incident.last_update >= self.cfg.update_interval_s:
             incident.last_update = t
-            return [self._event("update", incident, t)]
+            incident.updates += 1  # a fresh frame with every update (decision 03.10)
+            path = self.save_keyframe(incident.id, f"update_{incident.updates}", snapshot)
+            return [self._event("update", incident, t, keyframe=path)]
         return []
 
     def finish(self, t: float) -> list[IncidentEvent]:

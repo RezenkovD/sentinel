@@ -7,6 +7,7 @@ the phone gets a push notification; closing always edits the caption at once. Fa
 with a pause. The bot token is never logged or printed.
 """
 
+import json
 import logging
 import queue
 import threading
@@ -49,7 +50,7 @@ class TelegramNotifier:
         self._messages: dict[str, dict[str, int]] = {}  # incident -> chat -> message id
         self._photo: dict[str, bool] = {}  # incident -> its message carries a photo (else plain text)
         self._last_edit: dict[str, float] = {}
-        self._pending: dict[str, str] = {}  # incident -> newest caption waiting for its edit slot
+        self._pending: dict[str, tuple[str, Path | None]] = {}  # incident -> newest (caption, frame) waiting
         self._queue: queue.Queue[IncidentEvent | None] = queue.Queue()
         self._muted_until = float("-inf")  # /mute: no new messages or pushes until then
         self._worker: threading.Thread | None = None
@@ -114,7 +115,7 @@ class TelegramNotifier:
                 self._send(chat, text, event.keyframe, reply_to=mid)
             self._edit(event.incident_id, self._caption(_as_update(event)))
         elif event.kind == "update":
-            self._edit(event.incident_id, text)
+            self._edit(event.incident_id, text, photo=event.keyframe)  # a fresh frame with the update
         elif event.kind == "close":
             self._edit(event.incident_id, text, force=True)
         elif event.kind == "summary":
@@ -130,14 +131,14 @@ class TelegramNotifier:
             self._last_edit[incident_id] = self._clock()
 
     def send_due_edits(self, force: bool = False) -> None:
-        for incident_id, text in list(self._pending.items()):
+        for incident_id, (text, photo) in list(self._pending.items()):
             if (
                 force
                 or self._clock() - self._last_edit.get(incident_id, float("-inf")) >= self.edit_interval_s
             ):
-                self._edit(incident_id, text, force=True)
+                self._edit(incident_id, text, force=True, photo=photo)
 
-    def _edit(self, incident_id: str, text: str, force: bool = False) -> None:
+    def _edit(self, incident_id: str, text: str, force: bool = False, photo: Path | None = None) -> None:
         messages = self._messages.get(incident_id)
         if not messages:
             return
@@ -145,10 +146,17 @@ class TelegramNotifier:
             not force
             and self._clock() - self._last_edit.get(incident_id, float("-inf")) < self.edit_interval_s
         ):
-            self._pending[incident_id] = text
+            self._pending[incident_id] = (text, photo)
             return
         self._pending.pop(incident_id, None)
         for chat, mid in messages.items():
+            if photo is not None and Path(photo).exists() and self._photo.get(incident_id, True):
+                media = json.dumps(
+                    {"type": "photo", "media": "attach://photo", "caption": text}, ensure_ascii=False
+                )
+                data = {"chat_id": chat, "message_id": mid, "media": media}
+                if self._post("editMessageMedia", data, photo=Path(photo)) is not None:
+                    continue
             if self._photo.get(incident_id, True):
                 self._post("editMessageCaption", {"chat_id": chat, "message_id": mid, "caption": text})
             else:
