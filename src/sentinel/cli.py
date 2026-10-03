@@ -21,6 +21,7 @@ EVAL_COMMANDS = {
     "baselines": ("baselines", False),
     "weapon-finetune": ("weapon_finetune", False),
     "fsm-tune": ("fsm_tune", True),
+    "reference-stats": ("reference_stats", False),
 }
 
 

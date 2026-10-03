@@ -1,0 +1,94 @@
+{
+ "windows": 3200,
+ "fields": {
+  "summary.n_persons": {
+   "p50": 2.0,
+   "p90": 7.0,
+   "p99": 13.0,
+   "known": 3200
+  },
+  "summary.crowd_motion": {
+   "p50": 0.13,
+   "p90": 0.49,
+   "p99": 1.09,
+   "known": 3156
+  },
+  "summary.motion_energy": {
+   "p50": 1.29,
+   "p90": 4.79,
+   "p99": 14.61,
+   "known": 3200
+  },
+  "summary.motion_area": {
+   "p50": 1.31,
+   "p90": 6.84,
+   "p99": 24.54,
+   "known": 3200
+  },
+  "persons.speed": {
+   "p50": 0.15,
+   "p90": 0.57,
+   "p99": 1.32,
+   "known": 8561
+  },
+  "persons.limb_speed": {
+   "p50": 0.26,
+   "p90": 0.8,
+   "p99": 1.77,
+   "known": 4031
+  },
+  "persons.limb_accel": {
+   "p50": 3.13,
+   "p90": 10.28,
+   "p99": 24.33,
+   "known": 3698
+  },
+  "persons.pose_motion": {
+   "p50": 0.12,
+   "p90": 0.31,
+   "p99": 0.64,
+   "known": 4577
+  },
+  "persons.motion": {
+   "p50": 5.7,
+   "p90": 20.23,
+   "p99": 40.78,
+   "known": 9061
+  },
+  "persons.conf": {
+   "p50": 0.51,
+   "p90": 0.81,
+   "p99": 0.89,
+   "known": 9126
+  },
+  "interactions.distance_h": {
+   "p50": 0.53,
+   "p90": 1.38,
+   "p99": 1.9,
+   "known": 5645
+  },
+  "interactions.approach_speed": {
+   "p50": 0.16,
+   "p90": 0.73,
+   "p99": 1.74,
+   "known": 5041
+  },
+  "interactions.duration_s": {
+   "p50": 0.6,
+   "p90": 3.0,
+   "p99": 4.9,
+   "known": 5645
+  }
+ },
+ "shares": {
+  "summary.weapon_visible": 0.0594,
+  "persons.holds": 0.0025,
+  "interactions.facing": 0.0407
+ },
+ "source": "calm (NonFight) windows of our RWF train",
+ "perception": [
+  "3.0",
+  "ad09b92cb6f6d8ed"
+ ],
+ "created": "2026-10-03"
+}
