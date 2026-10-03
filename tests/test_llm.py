@@ -122,6 +122,8 @@ def test_an_invalid_answer_is_retried_once_with_the_error_then_counted_invalid(t
     b, session, _ = _b(tmp_path, [_ok(bad), _ok(GOOD)])
     assert b.answer(_scene()).status == "ok" and len(session.calls) == 2
     assert "risk" in session.calls[1]["messages"][-1]["content"]  # the error goes back to the model
+    record = json.loads((tmp_path / "openai_gpt-oss-120b" / "b_v1.jsonl").read_text().splitlines()[0])
+    assert record["attempts"] == 2 and "risk" in record["errors"][0] and record["error"] is None
     long = json.dumps({"risk": 0.5, "level": "attention", "reason_uk": "а" * 201}, ensure_ascii=False)
     b2, _, _ = _b(tmp_path / "2", [_ok(long), _ok("не JSON")])
     answer = b2.answer(_scene())

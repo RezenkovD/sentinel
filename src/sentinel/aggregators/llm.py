@@ -282,9 +282,10 @@ class BAggregator:
             {"role": "user", "content": canonical_json(scene)},
         ]
         usage = {"input": 0, "output": 0, "reasoning": 0}
-        latency, raw, error, result = 0.0, None, None, None
+        latency, raw, error, result, errors, attempts = 0.0, None, None, None, [], 0
         try:
             for attempt in range(2):
+                attempts += 1
                 data, took = self._request(messages, estimate=len(self.prompt) // 3 + 600)
                 latency += took
                 used = data.get("usage", {})
@@ -298,6 +299,7 @@ class BAggregator:
                     break
                 except ValueError as e:
                     error = str(e)
+                    errors.append(error)
                     if attempt == 0:  # one retry, telling the model what was wrong
                         messages = messages + [
                             {"role": "assistant", "content": raw},
@@ -319,6 +321,8 @@ class BAggregator:
                 "result": result.model_dump(mode="json") if result else None,
                 "raw": raw,
                 "error": error,
+                "attempts": attempts,
+                "errors": errors,
                 "usage": usage,
                 "latency_s": round(latency, 3),
                 "provider": self.provider,
