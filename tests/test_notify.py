@@ -217,3 +217,18 @@ def test_rejected_photo_falls_back_to_a_text_message(tmp_path: Path):
     tg = _telegram(session)
     tg.handle(_event("open", keyframe=_photo(tmp_path)))
     assert [m for m, _, _ in session.calls] == ["sendMessage"]
+
+
+def test_mute_holds_back_new_messages_but_not_the_closing_of_open_ones(tmp_path: Path):
+    session, clock = FakeSession(), FakeClock()
+    tg = _telegram(session, clock)
+    tg.handle(_event("open"))  # before the mute: a message exists
+    tg.mute(600.0)
+    tg.handle(_event("escalate"))  # a push while muted: held back
+    tg.handle(_event("open", incident_id="r-cam-1-002"))  # a new incident while muted: held back
+    tg.handle(_event("close", t=40.0))  # the open message must not stay "ALARM"
+    methods = [m for m, _, _ in session.calls]
+    assert methods == ["sendMessage", "editMessageText"]
+    clock.now = 700.0  # the mute is over
+    tg.handle(_event("open", incident_id="r-cam-1-003"))
+    assert [m for m, _, _ in session.calls][-1] == "sendMessage"

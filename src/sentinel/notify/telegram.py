@@ -48,6 +48,7 @@ class TelegramNotifier:
         self._last_edit: dict[str, float] = {}
         self._pending: dict[str, str] = {}  # incident -> newest caption waiting for its edit slot
         self._queue: queue.Queue[IncidentEvent | None] = queue.Queue()
+        self._muted_until = float("-inf")  # /mute: no new messages or pushes until then
         self._worker: threading.Thread | None = None
         if start_worker:
             self._worker = threading.Thread(target=self._run, name="telegram", daemon=True)
@@ -55,6 +56,14 @@ class TelegramNotifier:
 
     def __repr__(self) -> str:
         return f"TelegramNotifier(chats={self.chat_ids})"
+
+    def mute(self, seconds: float) -> None:
+        """No new incident messages and no escalation pushes for `seconds`; captions of messages already sent
+        are still edited, so an open incident never stays "ALARM" on the phone."""
+        self._muted_until = self._clock() + seconds
+
+    def muted(self) -> bool:
+        return self._clock() < self._muted_until
 
     def on_event(self, event: IncidentEvent) -> None:
         self._queue.put(event)  # never blocks the pipeline
@@ -84,6 +93,13 @@ class TelegramNotifier:
 
     def handle(self, event: IncidentEvent) -> None:
         text = caption(event)
+        if self.muted():
+            if event.kind in ("open", "summary") or not self._messages.get(event.incident_id):
+                log.info("telegram: muted, %s %s not sent", event.kind, event.incident_id)
+                return
+            if event.kind == "escalate" or event.merged:  # no push: only the caption of the existing message
+                self._edit(event.incident_id, caption(_as_update(event)))
+                return
         if event.kind == "open" or not self._messages.get(event.incident_id):
             # the opening message (or a new one if sending the opening failed: the incident must not be lost)
             self._open(event.incident_id, text, event.keyframe)

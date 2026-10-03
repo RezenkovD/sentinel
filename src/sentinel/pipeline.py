@@ -17,7 +17,7 @@ from sentinel.agents.context import ZoneContext
 from sentinel.agents.detector import Track
 from sentinel.agents.weapons import WeaponBox
 from sentinel.config import Config
-from sentinel.incidents import IncidentEvent, IncidentManager, KeyframeSaver
+from sentinel.incidents import IncidentEvent, IncidentManager, KeyframeSaver, State
 from sentinel.io.source import Frame
 from sentinel.keyframe import Snapshot
 from sentinel.notify import Notifier
@@ -406,6 +406,43 @@ def make_decider(config: Config, aggregator: Any):
     return LiveDecider(aggregator, worker, agg.mode, config.incidents, agg.g_low, agg.g_high)
 
 
+class RunController:
+    """What the Telegram commands act on in a running `sentinel run`: mode, state, mute."""
+
+    def __init__(self, pipeline: Any, reader: Any, notifier: Any, live: bool, clock=time.monotonic) -> None:
+        self.pipeline, self.reader, self.notifier, self.live, self.clock = (
+            pipeline,
+            reader,
+            notifier,
+            live,
+            clock,
+        )
+        self.started = clock()
+
+    def set_mode(self, mode: str) -> str | None:
+        decider = self.pipeline.decider
+        if mode != "A" and decider.worker is None:
+            return "агрегатор B недоступний (немає ключа API)"
+        decider.mode = mode
+        return None
+
+    def status(self) -> dict:
+        wall = max(self.clock() - self.started, 1e-6)
+        stats, decider = self.reader.stats, self.pipeline.decider
+        video = stats.received / self.reader.source_fps if self.reader.source_fps > 0 else wall
+        return {
+            "mode": decider.mode,
+            "rtf": 1.0 if self.live else round(wall / max(video, 1e-6), 2),
+            "fps": round(stats.delivered / wall, 1),
+            "open_incidents": int(self.pipeline.incidents.state in (State.ALARM, State.COOLDOWN)),
+            "b_queue": decider.worker.state() if decider.worker is not None else None,
+        }
+
+    def mute(self, seconds: float) -> None:
+        if hasattr(self.notifier, "mute"):
+            self.notifier.mute(seconds)
+
+
 def run_source(config: Config, source: str, paced: bool, results: Path = Path("results")) -> dict:
     """`sentinel run`: a camera / RTSP stream (live) or a file (paced or offline) until it ends or Ctrl+C."""
     import os
@@ -425,12 +462,20 @@ def run_source(config: Config, source: str, paced: bool, results: Path = Path("r
     journal = results / f"run_{run_id}.jsonl"
     pipeline = build_pipeline(config, config.source.camera_id, run_id, journal, notifier)
     reader = LatestFrameReader(source, mode, target_fps=config.analysis.fps)
+    commands = None
+    if hasattr(notifier, "mute"):  # Telegram: the bot also takes commands (/mode, /status, /mute)
+        from sentinel.notify.commands import BotCommands
+
+        controller = RunController(pipeline, reader, notifier, live)
+        commands = BotCommands(os.environ["TELEGRAM_TOKEN"].strip(), notifier.chat_ids, controller)
     started = time.monotonic()
     try:
         result = drive(reader, pipeline, mode)
     finally:
         reader.close()
         notifier.close()
+        if commands is not None:
+            commands.close()
     wall = time.monotonic() - started
     stats = reader.stats
     summary = {

@@ -263,3 +263,24 @@ def test_the_journal_says_where_each_window_risk_came_from(tmp_path: Path):
 
     events, _, journal = _run(tmp_path / "b", decider=FromB())
     assert events == [] and journal[3]["decision"]["source"] == "B" and journal[3]["risk"]["risk"] == 0.2
+
+
+def test_the_run_controller_switches_modes_reports_and_mutes():
+    from types import SimpleNamespace
+
+    from sentinel.aggregators.cascade import LiveDecider
+    from sentinel.incidents import State
+    from sentinel.pipeline import RunController
+
+    decider = LiveDecider(CloseMeansDanger(), None, "A", CONFIG.incidents, 0.4, 0.6)
+    pipeline = SimpleNamespace(decider=decider, incidents=SimpleNamespace(state=State.ALARM))
+    reader = SimpleNamespace(stats=SimpleNamespace(received=300, delivered=100, skipped=200), source_fps=30.0)
+    muted = []
+    notifier = SimpleNamespace(mute=muted.append)
+    clock = iter([0.0, 10.0])
+    controller = RunController(pipeline, reader, notifier, live=False, clock=lambda: next(clock))
+    assert controller.set_mode("B") is not None and decider.mode == "A"  # no B worker: refused
+    status = controller.status()
+    assert status == {"mode": "A", "rtf": 1.0, "fps": 10.0, "open_incidents": 1, "b_queue": None}
+    controller.mute(600)
+    assert muted == [600]
