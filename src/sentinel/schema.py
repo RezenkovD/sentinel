@@ -17,7 +17,7 @@ in grey levels, % of pixels changed) and motion inside each person's box. New fi
 
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
 
 SCHEMA_VERSION = 3
 
@@ -98,4 +98,19 @@ class RiskResult(_Contract):
     schema_version: Literal[3] = SCHEMA_VERSION
     risk: Probability
     level: AlertLevel
-    reason_uk: str
+    reason_uk: str = Field(min_length=1)
+
+    @field_validator("risk", mode="before")
+    @classmethod
+    def _a_number(cls, value: object) -> object:
+        # JSON `true` or "0.7" from an LLM is not a probability (pydantic would coerce both)
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError("risk must be a number")
+        return value
+
+    @field_validator("reason_uk")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("reason_uk must not be blank")
+        return value

@@ -178,6 +178,24 @@ def test_risk_result_rejects_out_of_range_risk_or_unknown_level(bad):
         RiskResult.model_validate(bad | {"reason_uk": "—"})
 
 
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {
+            "risk": True,
+            "level": "alarm",
+            "reason_uk": "так",
+        },  # a bool is not a probability (deferred from 01)
+        {"risk": "0.7", "level": "alarm", "reason_uk": "рядок"},  # nor is a string from a sloppy LLM
+        {"risk": 0.7, "level": "alarm", "reason_uk": ""},
+        {"risk": 0.7, "level": "alarm", "reason_uk": "   "},
+    ],
+)
+def test_risk_result_takes_only_a_number_and_a_real_explanation(bad):
+    with pytest.raises(ValidationError):
+        RiskResult.model_validate(bad)
+
+
 def test_features_that_could_not_be_computed_are_null_not_zero():
     # e.g. a person without a skeleton, a track seen in one frame only, a pair without nose/shoulder points
     person = Person(id=3, speed=None, limb_accel=None, holds=None, conf=0.7)
