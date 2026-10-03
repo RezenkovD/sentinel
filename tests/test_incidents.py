@@ -265,6 +265,7 @@ def test_the_key_frame_highlights_the_participants_of_its_own_window():
     manager.on_window(3.0, _risk(0.7), _scene(3.0, ids=(1, 2)), snapshot="frame-c")
     (call,) = keyframes.calls
     assert call == ("keyframe", "frame-b", {5, 6})
+    assert manager._incident.people == 2  # the count matches the people highlighted on the frame
 
 
 def FakeKeyframesManager():

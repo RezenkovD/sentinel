@@ -231,7 +231,7 @@ class IncidentManager:
             keyframe=None,
             weapon=held,
             last_update=t,
-            people=len(people),
+            people=max(len(people), len(best_people)),  # as many as the frame highlights
         )
         self._incident = incident
         while self._opens and t - self._opens[0] > 60.0:
