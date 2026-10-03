@@ -201,15 +201,6 @@ def main(argv: list[str] | None = None) -> None:
     labels = np.array([e.label for e in val])
     rule_aucs = {r: _auc(labels, np.array([episode_score(rs, r) for rs in val_risks])) for r in EPISODE_RULES}
     rule = max(EPISODE_RULES, key=lambda r: (rule_aucs[r], -EPISODE_RULES.index(r)))
-    a.weapon_override = False  # decision 30.09, item 4: what the one-window weapon override costs on RWF
-    plain = [[a.assess(s).risk for s in e.scenes] for e in val]
-    a.weapon_override = True
-    pairs = [(r, q) for rs, qs in zip(val_risks, plain, strict=True) for r, q in zip(rs, qs, strict=True)]
-    override_windows = sum(r != q for r, q in pairs)
-    override_episodes = {
-        label: sum(rs != qs and e.label == label for e, rs, qs in zip(val, val_risks, plain, strict=True))
-        for label in (0, 1)
-    }
     scores = np.array([episode_score(rs, rule) for rs in val_risks])
     threshold, f1 = f1_threshold(scores, labels)
     predicted = scores >= threshold
@@ -231,10 +222,6 @@ def main(argv: list[str] | None = None) -> None:
         "window_auc_val_with_people": _auc(window_label[with_people], window_risk[with_people]),
         "window_auc_val_all": _auc(window_label, window_risk),
         "episode_auc_val": rule_aucs[rule],
-        "episode_auc_val_without_weapon_override": _auc(
-            labels, np.array([episode_score(rs, rule) for rs in plain])
-        ),
-        "weapon_override": {"windows": override_windows, "episodes_by_label": override_episodes},
         "episode_rule_aucs": rule_aucs,
         "episode_f1_val": f1,
         "confusion_val": confusion,
@@ -289,10 +276,6 @@ def main(argv: list[str] | None = None) -> None:
         + ", ".join(f"{r} {_fmt(v)}" for r, v in rule_aucs.items())
         + f" → `{rule}`",
         f"- Поріг епізоду (F1 на val): {_fmt(threshold)}; F1 = {_fmt(f1)}",
-        "- Без одновіконного перекриття «зброя в руці»: AUC епізодів "
-        f"{_fmt(metrics['episode_auc_val_without_weapon_override'])} (перекриття змінило ризик у "
-        f"{override_windows} вікнах; епізодів NonFight / Fight: {override_episodes[0]} / "
-        f"{override_episodes[1]})",
         f"- Матриця помилок (епізоди val): TP {confusion['tp']}, FP {confusion['fp']}, FN {confusion['fn']}, "
         f"TN {confusion['tn']}",
         f"- θ_high = {_fmt(theta_high)} ({args.high_quantile:.0%} спокійних вікон val нижче), θ_low = "

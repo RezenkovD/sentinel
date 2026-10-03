@@ -120,6 +120,35 @@ class AggregatorAConfig(_Section):
     zone_prior: ZonePriorConfig
 
 
+class LlmProviderConfig(_Section):
+    base_url: str
+    model: str  # the provider's exact model id
+    key_env: str  # name of the .env variable with the API key (the key itself never goes into the config)
+    rpm: int | None = Field(default=None, ge=1)  # requests per minute; None = no limit known
+    tpm: int | None = Field(default=None, ge=1)  # tokens per minute
+    rpd: int | None = Field(default=None, ge=1)  # requests per day
+    tpd: int | None = Field(default=None, ge=1)  # tokens per day
+    price_in_per_m: float | None = Field(default=None, ge=0)  # USD per million input tokens
+    price_out_per_m: float | None = Field(default=None, ge=0)
+
+
+class LlmConfig(_Section):
+    provider: str
+    reasoning_effort: Literal["low", "medium", "high"]
+    temperature: float = Field(ge=0)
+    seed: int | None = None
+    max_tokens: int = Field(ge=1)
+    timeout_s: float = Field(gt=0)
+    cache_dir: Path
+    providers: dict[str, LlmProviderConfig]
+
+    @model_validator(mode="after")
+    def _known_provider(self) -> "LlmConfig":
+        if self.provider not in self.providers:
+            raise ValueError(f"llm.provider {self.provider!r} is not among {sorted(self.providers)}")
+        return self
+
+
 class IncidentsConfig(_Section):
     theta_high: float = Field(gt=0, le=1)
     theta_low: float = Field(ge=0, lt=1)
@@ -130,7 +159,6 @@ class IncidentsConfig(_Section):
     merge_participants_max_s: float | None = Field(default=None, ge=0)  # None = no time limit (SPEC §7)
     max_new_per_minute: int = Field(ge=1)
     update_interval_s: float = Field(ge=0)
-    weapon_override_margin: float = Field(ge=0)
     weapon_confirm_windows: int = Field(ge=1)
     blur_faces: bool
     output_dir: Path
@@ -173,6 +201,7 @@ class Config(_Section):
     motion: MotionConfig
     context: ContextConfig
     aggregator_a: AggregatorAConfig
+    llm: LlmConfig
     incidents: IncidentsConfig
     baselines: BaselinesConfig
     bench: BenchConfig

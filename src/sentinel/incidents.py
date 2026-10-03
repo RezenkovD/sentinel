@@ -24,6 +24,15 @@ from sentinel.config import IncidentsConfig
 from sentinel.schema import RiskResult, SceneDescription
 
 EventKind = Literal["open", "update", "escalate", "close", "summary"]
+_WEAPON_UK = {"gun": "вогнепальна зброя", "knife": "ніж"}
+
+
+def weapon_reason(scene: SceneDescription, reason_uk: str) -> str:
+    """An alarm raised by a confirmed weapon names it first, whatever the aggregator said (decision 01.10)."""
+    kinds = sorted({p.holds for p in scene.persons if p.holds})
+    return "Зброя в руці: " + ", ".join(_WEAPON_UK.get(k, k) for k in kinds) + "; " + reason_uk
+
+
 KeyframeSaver = Callable[[str, str, Any], Path | None]
 
 
@@ -183,8 +192,10 @@ class IncidentManager:
             last.reopenings += 1
             last.participants |= people
             last.people = max(last.people, len(people))
-            last.weapon = last.weapon or held
+            was_weapon, last.weapon = last.weapon, last.weapon or held
             self._raise_max(last, risk)
+            if held and not was_weapon:
+                last.reason_uk = weapon_reason(scene, risk.reason_uk)
             last.last_update = t
             path = (
                 None
@@ -200,7 +211,7 @@ class IncidentManager:
             id=incident_id,
             started_at=t,
             max_risk=max(risk.risk, best_risk),
-            reason_uk=risk.reason_uk,
+            reason_uk=weapon_reason(scene, risk.reason_uk) if held else risk.reason_uk,
             participants=people,
             keyframe=None,
             weapon=held,
@@ -232,7 +243,7 @@ class IncidentManager:
         if held and not incident.weapon:
             incident.weapon = True
             incident.escalations += 1
-            incident.reason_uk = risk.reason_uk
+            incident.reason_uk = weapon_reason(scene, risk.reason_uk)
             incident.last_update = t
             path = self.save_keyframe(incident.id, f"escalate_{incident.escalations}", snapshot)
             return [self._event("escalate", incident, t, keyframe=path)]
@@ -277,7 +288,9 @@ class IncidentManager:
     def _raise_max(incident: Incident, risk: RiskResult) -> None:
         if risk.risk > incident.max_risk:
             incident.max_risk = risk.risk
-            incident.reason_uk = risk.reason_uk
+            # a weapon incident keeps naming the weapon; the holder may be out of view in this window
+            weapon = incident.reason_uk.split("; ", 1)[0] if incident.weapon else None
+            incident.reason_uk = f"{weapon}; {risk.reason_uk}" if weapon else risk.reason_uk
 
     def _summary_event(self, t: float, risk: RiskResult) -> IncidentEvent:
         minute = t - t % 60.0

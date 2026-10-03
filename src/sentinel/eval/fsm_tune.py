@@ -241,10 +241,6 @@ def main(argv: list[str] | None = None) -> None:
         if theta_low < base.theta_high
     ]
     best = choose(rows)
-    # decision 30.09, item 4: the same streams without A's one-window "weapon in hand" floor
-    aggregator.weapon_override = False
-    plain = build_streams(*scored_clips(val, aggregator), args.streams, args.seed)
-    no_override = evaluate(plain, replace_cfg(base, best["theta_low"], best["quiet_s"]))
     current = next(
         (
             r
@@ -282,16 +278,11 @@ def main(argv: list[str] | None = None) -> None:
         "",
         f"Обрано: θ_low = {_theta(best['theta_low'])}, M = {_num(best['quiet_s'])} с — найбільша "
         "частка опрацьованих бійок, далі найменше інцидентів у спокої, далі коротше M.",
-        "",
-        "Без одновіконного перекриття A «зброя в руці» (ті самі склейки, обрані θ_low і M): опрацьовано "
-        f"{_pct(no_override['handled'])}, виявлено {_pct(no_override['detected'])}, інцидентів у спокої "
-        f"{_num(no_override['calm_incidents_per_h'])} / год (з перекриттям — {_pct(best['handled'])}, "
-        f"{_pct(best['detected'])}, {_num(best['calm_incidents_per_h'])} / год).",
     ]
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text("\n".join(lines) + "\n", encoding="utf-8")
     args.out.with_suffix(".json").write_text(
-        json.dumps({"rows": rows, "best": best, "without_weapon_override": no_override}, indent=1),
+        json.dumps({"rows": rows, "best": best}, indent=1),
         encoding="utf-8",
     )
     print("\n".join(lines))

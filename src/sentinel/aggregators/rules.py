@@ -1,18 +1,15 @@
-"""Aggregator A: logistic model over scene features plus the "weapon in hand" override rule (SPEC §3–4).
+"""Aggregator A: logistic model over scene features (SPEC §3–4).
 
 `scene_to_features` is the only way from a scene description to A's inputs: a fixed order of named features.
 A null feature takes its neutral value from the config (a calm scene); indicators say that the wrist
 acceleration was missing ("no data about the hands" is not "calm hands") and that nobody was detected.
 
-Weapons are not features of A (decision 30.09, report 03): they act through the "weapon in hand" override here
-and the confirmation in the incident automaton. An empty frame where nothing moves (motion_area below
-`quiet_motion_area`, τ_quiet) is zero without computation (SPEC §5); an empty frame with motion is scored from
-the pixel-motion features by a model fitted on all windows (`empty_windows: score`), while a model fitted on
-windows with people only keeps every empty frame at zero (`empty_windows: zero`).
-
-v0 uses hand-set weights from the config. The same object is ready for a fitted logistic regression
-(`fit` / `save` / `load`): features are standardised as z = clip((x − mean) / scale, ±clip) and
-risk = sigmoid(bias + w · z); hand-set weights use mean = 0 and the configured scale.
+Weapons are not features of A and do not touch its risk (decisions 30.09 and 01.10): the weapon alarm is
+the incident automaton's rule (`holds` confirmed in consecutive windows), the same for A, B and the cascade.
+An empty frame where nothing moves (motion_area below `quiet_motion_area`, τ_quiet) is zero without
+computation (SPEC §5); an empty frame with motion is scored from the pixel-motion features by a model fitted
+on all windows (`empty_windows: score`), while a model fitted on windows with people only keeps every empty
+frame at zero (`empty_windows: zero`).
 """
 
 import json
@@ -61,7 +58,6 @@ FEATURE_NAMES_UK = {  # for tables in reports and the thesis
     "limb_accel_missing": "немає даних про руки",
     "no_persons": "людей у кадрі не знайдено",
 }
-_WEAPON_UK = {"gun": "вогнепальна зброя", "knife": "ніж"}
 _REASON_GROUP = {  # one phrase per group in an explanation
     "crowd_motion": "motion",
     "max_speed": "motion",
@@ -83,10 +79,6 @@ def quiet_empty(scene: SceneDescription, quiet_motion_area: float) -> bool:
     """Nobody detected and nothing moves: the one case A answers with zero without computing (SPEC §5)."""
     area = scene.summary.motion_area
     return scene.summary.n_persons == 0 and (area is None or area < quiet_motion_area)
-
-
-def weapon_held(scene: SceneDescription) -> bool:
-    return any(p.holds is not None for p in scene.persons)
 
 
 def scene_to_features(scene: SceneDescription, config: Config) -> np.ndarray:
@@ -162,11 +154,6 @@ def _reason(name: str, x: dict[str, float], scene: SceneDescription) -> str | No
     return None
 
 
-def _weapon_phrase(scene: SceneDescription) -> str:
-    kinds = sorted({p.holds for p in scene.persons if p.holds})
-    return "зброя в руці: " + ", ".join(_WEAPON_UK[k] for k in kinds)
-
-
 def make_aggregator(config: Config) -> "RulesAggregator":
     """The trained A named in the config, or the hand-set weights when none is set.
 
@@ -208,7 +195,6 @@ class RulesAggregator:
         self.weights, self.bias, self.mean, self.scale, self.clip = weights, bias, mean, scale, clip
         self.config = config
         self.empty_windows = empty_windows
-        self.weapon_override = True  # evaluation switch: the one-window "weapon in hand" floor on the risk
         self._neutral_z = self._standardise(np.array([config.aggregator_a.neutral[n] for n in FEATURE_NAMES]))
 
     @classmethod
@@ -236,8 +222,6 @@ class RulesAggregator:
         z = self._standardise(x)
         risk = float(1.0 / (1.0 + np.exp(-(self.bias + self.weights @ z))))
         named = dict(zip(FEATURE_NAMES, x, strict=True))
-        if self.weapon_override and weapon_held(scene):
-            risk = max(risk, min(1.0, thresholds.theta_high + thresholds.weapon_override_margin))
         level = (
             "alarm"
             if risk >= thresholds.theta_high
@@ -253,8 +237,6 @@ class RulesAggregator:
         floor = self.config.aggregator_a.reason_min_contribution
         phrases: list[str] = []
         groups: set[str] = set()
-        if self.weapon_override and weapon_held(scene):  # the override decided the alarm: say so first
-            phrases.append(_weapon_phrase(scene))
         for i in np.argsort(-contributions):
             name = FEATURE_NAMES[i]
             if contributions[i] < floor or len(phrases) == 3:

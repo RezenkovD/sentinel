@@ -16,7 +16,6 @@ BASE = IncidentsConfig(
     merge_participants_max_s=None,
     max_new_per_minute=6,
     update_interval_s=10.0,
-    weapon_override_margin=0.1,
     weapon_confirm_windows=2,
     blur_faces=True,
     output_dir=Path("results/incidents"),
@@ -94,6 +93,21 @@ def test_weapon_held_by_the_same_person_in_two_consecutive_windows_opens_an_alar
     events = _feed(manager, [0.3, 0.3], holds_at={0, 1})  # low risk: the weapon rule alone
     assert _kinds(events) == ["open"] and events[0].level == "alarm" and events[0].t == 2.0
     assert keyframes.saved[0][1] == "keyframe"
+
+
+def test_a_weapon_alarm_names_the_weapon_first_whatever_the_aggregator_said():
+    """Decision 01.10: the automaton, not A or B, explains an alarm raised by a confirmed weapon."""
+    manager, _ = _manager()
+    events = _feed(manager, [0.3, 0.3, 0.9], holds_at={0, 1, 2})
+    assert events[0].reason_uk.startswith("Зброя в руці: вогнепальна зброя; ризик 0.3")
+    update = manager.on_window(13.0, _risk(0.95), _scene(13.0, holds="gun"))  # a higher risk later
+    assert update[0].reason_uk.startswith("Зброя в руці: вогнепальна зброя")
+
+
+def test_a_weapon_confirmed_during_an_alarm_escalates_with_the_weapon_named():
+    manager, _ = _manager()
+    events = _feed(manager, [0.9, 0.9, 0.9, 0.9, 0.9], holds_at={3, 4})
+    assert _kinds(events) == ["open", "escalate"] and events[1].reason_uk.startswith("Зброя в руці")
 
 
 def test_weapon_in_a_single_window_does_not_open_an_alarm():

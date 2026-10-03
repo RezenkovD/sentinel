@@ -163,15 +163,15 @@ def test_risk_grows_with_signs_of_aggression(calm: SceneDescription, tense: Scen
     assert a.assess(tense).risk > a.assess(calm).risk
 
 
-def test_weapon_in_hand_overrides_to_alarm():
+def test_a_weapon_in_hand_does_not_change_the_risk_of_a():
+    """Decision 01.10 (report 04): the weapon alarm is the automaton's rule, alike for A, B, cascade."""
     a = _aggregator()
-    result = a.assess(_scene(persons=[_person(1, holds="gun"), _person(2)]))
-    assert result.risk >= CONFIG.incidents.theta_high + 0.1 - 1e-9
-    assert result.level == "alarm"
+    armed = a.assess(_scene(persons=[_person(1, holds="gun"), _person(2)]))
+    assert armed.risk == a.assess(_scene()).risk and "зброя" not in armed.reason_uk.lower()
 
 
 def test_weapons_are_not_features_of_a():
-    """Decision 30.09 (report 03): weapons act only through the override and the incident automaton."""
+    """Decisions 30.09 and 01.10: weapons act only through the incident automaton."""
     a = _aggregator()
     assert a.assess(_scene(weapon_visible=True)).risk == a.assess(_scene()).risk
     assert not {"weapon_visible", "weapon_held", "facing_close"} & set(FEATURE_NAMES)
@@ -298,13 +298,6 @@ def test_a_saved_model_keeps_its_own_input_settings(tmp_path: Path):
         update={"aggregator_a": CONFIG.aggregator_a.model_copy(update={"neutral": neutral})}
     )
     assert RulesAggregator.load(path, edited).assess(scene).risk == before
-
-
-def test_weapon_alarm_explanation_names_the_weapon_first():
-    a = RulesAggregator.from_config(CONFIG)
-    scene = _scene(persons=[_person(1, speed=2.5, accel=30.0, holds="gun"), _person(2)])
-    result = a.assess(scene)
-    assert result.level == "alarm" and result.reason_uk.startswith("Зброя в руці: вогнепальна зброя")
 
 
 def test_running_a_model_on_another_perception_is_reported(tmp_path: Path, capsys):
