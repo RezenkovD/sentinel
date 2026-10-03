@@ -62,7 +62,7 @@ class RecordKeyframes:
     def __init__(self) -> None:
         self.saved = []
 
-    def __call__(self, incident_id: str, name: str, snapshot) -> Path:
+    def __call__(self, incident_id: str, name: str, snapshot, highlight=None) -> Path:
         self.saved.append((name, snapshot))
         return Path(f"/fake/{incident_id}/{name}.jpg")
 

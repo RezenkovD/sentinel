@@ -17,6 +17,7 @@ FACE_KEYPOINTS = (0, 1, 2, 3, 4)  # COCO: nose, eyes, ears
 FACE_POINT_CONF = 0.3
 PERSON_COLOUR = (0, 200, 0)  # BGR
 WEAPON_COLOUR = (0, 0, 255)
+BYSTANDER_COLOUR = (128, 128, 128)  # people in view who are not part of the incident
 
 
 @dataclass(frozen=True, eq=False)
@@ -64,6 +65,7 @@ def render_keyframe(
     weapons: list[WeaponBox],
     blur_faces: bool,
     others: list[tuple[tuple[float, float, float, float], np.ndarray | None]] = (),
+    highlight: set[int] | frozenset[int] | None = None,  # the incident's participants; None: everyone alike
 ) -> np.ndarray:
     out = image.copy()
     if blur_faces:
@@ -73,8 +75,11 @@ def render_keyframe(
             if x2 - x1 > 1 and y2 - y1 > 1:
                 size = max(x2 - x1, y2 - y1) // 2 * 2 + 1
                 out[y1:y2, x1:x2] = cv2.GaussianBlur(out[y1:y2, x1:x2], (size, size), 0)
-    for track in tracks:
+    for track in sorted(tracks, key=lambda t: highlight is None or t.track_id in highlight):
         x1, y1, x2, y2 = (int(round(v)) for v in track.box)
+        if highlight is not None and track.track_id not in highlight:
+            cv2.rectangle(out, (x1, y1), (x2, y2), BYSTANDER_COLOUR, 1)  # faint, unlabelled
+            continue
         cv2.rectangle(out, (x1, y1), (x2, y2), PERSON_COLOUR, 2)
         cv2.putText(
             out, f"#{track.track_id}", (x1, max(12, y1 - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, PERSON_COLOUR, 1
@@ -94,7 +99,9 @@ class KeyframeWriter:
         self.output_dir = Path(output_dir)
         self.blur_faces = blur_faces
 
-    def __call__(self, incident_id: str, name: str, snapshot: Snapshot | None) -> Path | None:
+    def __call__(
+        self, incident_id: str, name: str, snapshot: Snapshot | None, highlight: set[int] | None = None
+    ) -> Path | None:
         if snapshot is None:
             return None
         image = render_keyframe(
@@ -104,6 +111,7 @@ class KeyframeWriter:
             snapshot.weapons,
             self.blur_faces,
             snapshot.others,
+            highlight,
         )
         path = self.output_dir / incident_id / f"{name}.jpg"
         path.parent.mkdir(parents=True, exist_ok=True)

@@ -26,7 +26,7 @@ class FakeKeyframes:
     def __init__(self) -> None:
         self.saved: list[tuple[str, str, object]] = []
 
-    def __call__(self, incident_id: str, name: str, snapshot: object) -> Path:
+    def __call__(self, incident_id: str, name: str, snapshot: object, highlight=None) -> Path:
         self.saved.append((incident_id, name, snapshot))
         return Path(f"/fake/{incident_id}/{name}.jpg")
 

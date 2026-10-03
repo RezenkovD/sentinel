@@ -9,7 +9,8 @@ ALARM -> COOLDOWN when risk drops below theta_low; COOLDOWN -> NORMAL (close) af
 theta_low without a break; COOLDOWN -> ALARM when risk is high again. More than max_new_per_minute new
 incidents per minute are folded into one summary instead of separate notifications.
 
-Key frames are opaque snapshots handed to `save_keyframe(incident_id, name, snapshot)`; the incident machine
+Key frames are opaque snapshots handed to
+`save_keyframe(incident_id, name, snapshot, highlight=participants)`; the incident machine
 only decides which window's snapshot to keep.
 """
 
@@ -33,7 +34,7 @@ def weapon_reason(scene: SceneDescription, reason_uk: str) -> str:
     return "Зброя в руці: " + ", ".join(_WEAPON_UK.get(k, k) for k in kinds) + "; " + reason_uk
 
 
-KeyframeSaver = Callable[[str, str, Any], Path | None]
+KeyframeSaver = Callable[..., Path | None]  # (incident_id, name, snapshot, highlight=participants)
 
 
 class State(Enum):
@@ -210,7 +211,9 @@ class IncidentManager:
             path = (
                 None
                 if last.suppressed
-                else self.save_keyframe(last.id, f"reopen_{last.reopenings}", snapshot)
+                else self.save_keyframe(
+                    last.id, f"reopen_{last.reopenings}", snapshot, highlight=last.participants
+                )
             )
             return [] if last.suppressed else [self._event("update", last, t, keyframe=path, merged=True)]
 
@@ -235,7 +238,7 @@ class IncidentManager:
             incident.suppressed = True
             return [self._summary_event(t, risk)]
         self._opens.append(t)
-        incident.keyframe = self.save_keyframe(incident_id, "keyframe", best_snapshot)
+        incident.keyframe = self.save_keyframe(incident_id, "keyframe", best_snapshot, highlight=people)
         return [self._event("open", incident, t, keyframe=incident.keyframe)]
 
     def _continue(
@@ -255,12 +258,16 @@ class IncidentManager:
             incident.escalations += 1
             incident.reason_uk = weapon_reason(scene, risk.reason_uk)
             incident.last_update = t
-            path = self.save_keyframe(incident.id, f"escalate_{incident.escalations}", snapshot)
+            path = self.save_keyframe(
+                incident.id, f"escalate_{incident.escalations}", snapshot, highlight=incident.participants
+            )
             return [self._event("escalate", incident, t, keyframe=path)]
         if t - incident.last_update >= self.cfg.update_interval_s:
             incident.last_update = t
             incident.updates += 1  # a fresh frame with every update (decision 03.10)
-            path = self.save_keyframe(incident.id, f"update_{incident.updates}", snapshot)
+            path = self.save_keyframe(
+                incident.id, f"update_{incident.updates}", snapshot, highlight=incident.participants
+            )
             return [self._event("update", incident, t, keyframe=path)]
         return []
 

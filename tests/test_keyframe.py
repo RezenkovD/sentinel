@@ -68,3 +68,23 @@ def test_faces_of_people_without_a_track_are_blurred_too():
     bystander = ((200.0, 100.0, 300.0, 380.0), _face_keypoints())  # seen by the pose model only
     out = render_keyframe(image, [], {}, [], blur_faces=True, others=[bystander])
     assert _detail(out, 240, 130, 260, 150) < 0.2 * _detail(image, 240, 130, 260, 150)
+
+
+def test_participants_stand_out_and_bystanders_are_faint():
+    """Decision 03.10 (Dmytro): the operator sees at once who is involved."""
+    image = np.zeros((400, 600, 3), dtype=np.uint8)
+    other = Track(track_id=9, box=(400.0, 100.0, 500.0, 380.0), conf=0.9)
+    out = render_keyframe(image, [PERSON, other], {}, [], blur_faces=False, highlight={3})
+    assert tuple(out[250, 200]) == (0, 200, 0)  # participant: green
+    assert tuple(out[250, 400]) == (128, 128, 128)  # bystander: grey
+    everyone = render_keyframe(image, [PERSON, other], {}, [], blur_faces=False)
+    assert tuple(everyone[250, 400]) == (0, 200, 0)  # without a highlight everybody is drawn alike
+
+
+def test_the_writer_passes_the_participants_on(tmp_path: Path):
+    image = np.zeros((400, 600, 3), dtype=np.uint8)
+    other = Track(track_id=9, box=(400.0, 100.0, 500.0, 380.0), conf=0.9)
+    snapshot = Snapshot(image=image, tracks=[PERSON, other], skeletons={}, weapons=[])
+    path = KeyframeWriter(tmp_path, blur_faces=False)("inc-1", "keyframe", snapshot, highlight={3})
+    saved = cv2.imread(str(path))
+    assert abs(int(saved[250, 400][0]) - 128) < 20 and saved[250, 400][1] < 160  # grey, not green

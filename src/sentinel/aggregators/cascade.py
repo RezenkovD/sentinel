@@ -46,7 +46,7 @@ def simulate(
 ) -> CascadeRun:
     """One stream of windows (1 s apart) through the cascade and the automaton; `b` maps a window index to B's
     cached answer and its latency in seconds."""
-    manager = IncidentManager(cfg, "cam-1", lambda *_: None, "cascade")
+    manager = IncidentManager(cfg, "cam-1", lambda *_, **__: None, "cascade")
     arriving: dict[int, list[tuple[int, RiskResult]]] = {}
     run = CascadeRun([], 0, [])
     for i, (scene, a_result) in enumerate(zip(scenes, a, strict=True)):

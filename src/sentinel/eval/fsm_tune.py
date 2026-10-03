@@ -110,7 +110,7 @@ def build_streams(
 
 
 def run_stream(stream: Stream, cfg: IncidentsConfig) -> list[IncidentEvent]:
-    manager = IncidentManager(cfg, "cam-1", lambda *_: None, "fsm-tune")
+    manager = IncidentManager(cfg, "cam-1", lambda *_, **__: None, "fsm-tune")
     events = []
     for t, risk, scene in stream.windows:
         events += manager.on_window(t, risk, scene)
