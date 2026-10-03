@@ -15,6 +15,7 @@ from sentinel.config import DEFAULT_CONFIG, load_config
 from sentinel.schema import Person, SceneDescription, Summary, Window, Zone
 
 CONFIG = load_config(DEFAULT_CONFIG)
+PROMPT = "b_draft1"  # a prompt file that stays in the repository (iterations are kept)
 STATS = {
     "fields": {"persons.speed": {"p50": 0.15, "p90": 0.57, "p99": 1.32}},
     "shares": {"persons.holds": 0.001},
@@ -87,8 +88,9 @@ def _b(
     session = FakeSession(responses)
     provider = CONFIG.llm.providers["groq"].model_copy(update=limits)
     client = LlmClient(provider, "test-key", session=session, clock=clock, sleep=clock.sleep)
-    cache = LlmCache(tmp_path, provider.model, "b_v1")
-    return BAggregator(CONFIG, client, cache, "groq", stats=STATS, wait_on_limits=wait), session, clock
+    cache = LlmCache(tmp_path, provider.model, PROMPT)
+    b = BAggregator(CONFIG, client, cache, "groq", stats=STATS, prompt_version=PROMPT, wait_on_limits=wait)
+    return b, session, clock
 
 
 def test_the_scene_goes_to_b_as_canonical_json_without_aux():
@@ -98,7 +100,7 @@ def test_the_scene_goes_to_b_as_canonical_json_without_aux():
 
 
 def test_the_prompt_carries_its_reference_values():
-    prompt = render_prompt("b_v1", STATS)
+    prompt = render_prompt(PROMPT, STATS)
     assert "persons.speed: 0.15 / 0.57 / 1.32" in prompt and "persons.holds: 0.1 %" in prompt
     assert "{reference}" not in prompt
 
@@ -113,7 +115,7 @@ def test_a_valid_answer_is_parsed_recorded_and_answered_from_the_cache_next_time
     assert request["response_format"]["type"] == "json_schema"
     again = b.answer(_scene())  # same scene: no second request
     assert again.cached and again.result == first.result and len(session.calls) == 1
-    record = json.loads((tmp_path / "openai_gpt-oss-120b" / "b_v1.jsonl").read_text().splitlines()[0])
+    record = json.loads((tmp_path / "openai_gpt-oss-120b" / f"{PROMPT}.jsonl").read_text().splitlines()[0])
     assert record["provider"] == "groq" and record["usage"]["reasoning"] == 40 and "latency_s" in record
 
 
@@ -122,7 +124,7 @@ def test_an_invalid_answer_is_retried_once_with_the_error_then_counted_invalid(t
     b, session, _ = _b(tmp_path, [_ok(bad), _ok(GOOD)])
     assert b.answer(_scene()).status == "ok" and len(session.calls) == 2
     assert "risk" in session.calls[1]["messages"][-1]["content"]  # the error goes back to the model
-    record = json.loads((tmp_path / "openai_gpt-oss-120b" / "b_v1.jsonl").read_text().splitlines()[0])
+    record = json.loads((tmp_path / "openai_gpt-oss-120b" / f"{PROMPT}.jsonl").read_text().splitlines()[0])
     assert record["attempts"] == 2 and "risk" in record["errors"][0] and record["error"] is None
     long = json.dumps({"risk": 0.5, "level": "attention", "reason_uk": "а" * 201}, ensure_ascii=False)
     b2, _, _ = _b(tmp_path / "2", [_ok(long), _ok("не JSON")])
@@ -172,7 +174,9 @@ def test_the_cache_key_depends_on_prompt_model_provider_and_scene(tmp_path: Path
     b, _, _ = _b(tmp_path, [])
     key = b.key(_scene())
     assert key != b.key(_scene(speed=0.5))
-    assert key != BAggregator(CONFIG, b.client, b.cache, "cerebras", stats=STATS).key(_scene())
+    assert key != BAggregator(CONFIG, b.client, b.cache, "cerebras", stats=STATS, prompt_version=PROMPT).key(
+        _scene()
+    )
     b.prompt_version = "b_v2"
     assert key != b.key(_scene())
 
