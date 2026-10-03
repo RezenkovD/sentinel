@@ -215,3 +215,10 @@ def test_an_answer_later_than_the_timeout_is_not_used():
     worker.run_once()
     ((scene, answer),) = worker.take()
     assert answer.status == "timeout" and answer.result is None
+
+
+def test_the_experiment_waits_out_a_long_daily_limit(tmp_path: Path):
+    limited = [FakeResponse(429) for _ in range(30)]  # no retry-after: backing off, never giving up
+    b, _, clock = _b(tmp_path, [*limited, _ok(GOOD)])
+    assert b.answer(_scene()).status == "ok"
+    assert max(clock.slept) <= 600.0 and sum(clock.slept) > 3600.0

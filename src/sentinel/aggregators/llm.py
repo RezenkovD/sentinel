@@ -217,10 +217,10 @@ class BAggregator:
         stats: dict | None = None,
         prompt_version: str = PROMPT_VERSION,
         wait_on_limits: bool = True,
-        max_waits: int = 20,
+        max_errors: int = 3,
     ) -> None:
         self.config, self.client, self.cache, self.provider = config, client, cache, provider
-        self.prompt_version, self.wait_on_limits, self.max_waits = prompt_version, wait_on_limits, max_waits
+        self.prompt_version, self.wait_on_limits, self.max_errors = prompt_version, wait_on_limits, max_errors
         self.model = config.llm.providers[provider].model
         self.prompt = render_prompt(prompt_version, stats if stats is not None else load_reference_stats())
         self.structured = True  # json_schema until the provider refuses it
@@ -248,8 +248,10 @@ class BAggregator:
         return body
 
     def _request(self, messages: list[dict], estimate: int) -> tuple[dict, float]:
-        """One request, waiting for the limits (experiment) or giving up at once (live)."""
-        for _ in range(self.max_waits):
+        """One request: waiting for the limits as long as it takes (experiment — a daily limit may hold for
+        hours; back-off up to 10 min) or giving up at once (live)."""
+        limited, errors = 0, 0
+        while True:
             wait = self.client.room(estimate)
             if wait > 0:
                 if not self.wait_on_limits:
@@ -261,13 +263,16 @@ class BAggregator:
             except RateLimited as e:
                 if not self.wait_on_limits:
                     raise
-                self.client.sleep(e.retry_after or 10.0)
+                limited += 1
+                self.client.sleep(e.retry_after or min(600.0, 10.0 * 2 ** min(limited - 1, 6)))
             except LlmError as e:
                 if self.structured and ("response_format" in str(e) or "json_schema" in str(e)):
                     self.structured = False  # this provider/model has no structured output: JSON mode
                     continue
-                raise
-        raise RateLimited(None)
+                errors += 1
+                if errors > self.max_errors:
+                    raise
+                self.client.sleep(5.0 * errors)  # a transient provider error (5xx, timeout): try again
 
     def answer(self, scene: SceneDescription, use_cache: bool = True) -> BAnswer:
         key = self.key(scene)
