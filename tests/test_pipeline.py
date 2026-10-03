@@ -67,7 +67,7 @@ class RecordKeyframes:
         return Path(f"/fake/{incident_id}/{name}.jpg")
 
 
-def _run(tmp_path: Path, seconds: float = 8.0):
+def _run(tmp_path: Path, seconds: float = 8.0, decider=None):
     people = TwoPeople()
     notifier, keyframes = Collect(), RecordKeyframes()
     journal = tmp_path / "run.jsonl"
@@ -80,6 +80,7 @@ def _run(tmp_path: Path, seconds: float = 8.0):
         run_id="test",
         journal=journal,
         keyframes=keyframes,
+        decider=decider,
     )
     for i in range(int(seconds * 10)):
         t = round(0.1 * i, 1)
@@ -248,3 +249,17 @@ def test_perception_gives_each_scene_with_its_window_aux():
     assert [s.window.t_start for s, _ in results] == [0.0, 1.0, 2.0]
     assert [a["frames"] for _, a in results] == [10, 10, 5]
     assert all(a["weapon_max_conf"] == 0.2 for _, a in results)
+
+
+def test_the_journal_says_where_each_window_risk_came_from(tmp_path: Path):
+    _, _, journal = _run(tmp_path)
+    assert journal[3]["decision"] == {"mode": "A", "source": "A"}
+
+    class FromB:
+        mode = "B"
+
+        def decide(self, scene, state):
+            return RiskResult(risk=0.2, level="normal", reason_uk="спокійно"), {"mode": "B", "source": "B"}
+
+    events, _, journal = _run(tmp_path / "b", decider=FromB())
+    assert events == [] and journal[3]["decision"]["source"] == "B" and journal[3]["risk"]["risk"] == 0.2

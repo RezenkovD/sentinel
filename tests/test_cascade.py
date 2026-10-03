@@ -55,3 +55,71 @@ def test_windows_outside_the_grey_zone_never_ask_b():
     a = [_r(0.05), _r(0.05)]
     run = simulate(_scenes(2), a, {}, CFG, g_low=0.4, g_high=0.6)
     assert run.calls == 0 and run.missing == [] and [r.risk for r in run.risks] == [0.05, 0.05]
+
+
+class FakeA:
+    def assess(self, scene):
+        return _r(0.5 if scene.window.t_start < 10 else 0.05)
+
+
+class FakeWorker:
+    def __init__(self) -> None:
+        self.submitted, self.answers = [], []
+
+    def submit(self, scene) -> None:
+        self.submitted.append(scene.window.t_start)
+
+    def take(self):
+        out, self.answers = self.answers, []
+        return out
+
+    def state(self) -> dict:
+        return {"queued": 0, "busy": False, "dropped": 0}
+
+
+def _answer(status: str, risk: float | None):
+    from sentinel.aggregators.llm import BAnswer
+
+    return BAnswer(
+        status, _r(risk) if risk is not None else None, None, {}, 0.6, "groq", "m", "b_v1", False, None
+    )
+
+
+def test_live_a_mode_never_asks_b():
+    from sentinel.aggregators.cascade import LiveDecider
+
+    worker = FakeWorker()
+    decider = LiveDecider(FakeA(), worker, "A", CFG, g_low=0.4, g_high=0.6)
+    risk, info = decider.decide(_scenes(1)[0], State.NORMAL)
+    assert risk.risk == 0.5 and info["source"] == "A" and worker.submitted == []
+
+
+def test_live_b_uses_the_newest_answer_that_has_arrived_and_falls_back_to_a_meanwhile():
+    from sentinel.aggregators.cascade import LiveDecider
+
+    worker = FakeWorker()
+    decider = LiveDecider(FakeA(), worker, "B", CFG, g_low=0.4, g_high=0.6)
+    scenes = _scenes(3)
+    risk, info = decider.decide(scenes[0], State.NORMAL)
+    assert risk.risk == 0.5 and info["source"] == "A" and info["fallback"] == "no B answer yet"
+    worker.answers = [(scenes[0], _answer("ok", 0.9))]
+    risk, info = decider.decide(scenes[1], State.NORMAL)
+    assert risk.risk == 0.9 and info["source"] == "B" and info["b_window_end"] == 1.0
+    worker.answers = [(scenes[1], _answer("unavailable", None))]
+    risk, info = decider.decide(scenes[2], State.NORMAL)
+    assert info["source"] == "A" and info["b_answers"][0]["status"] == "unavailable"
+    assert worker.submitted == [0.0, 1.0, 2.0]
+
+
+def test_live_cascade_asks_b_only_where_the_rule_says_and_the_mode_can_change():
+    from sentinel.aggregators.cascade import LiveDecider
+
+    worker = FakeWorker()
+    decider = LiveDecider(FakeA(), worker, "cascade", CFG, g_low=0.4, g_high=0.6)
+    calm = _scenes(12)[11]  # A says 0.05 there
+    decider.decide(_scenes(1)[0], State.NORMAL)
+    decider.decide(calm, State.NORMAL)
+    assert worker.submitted == [0.0]
+    decider.mode = "A"
+    decider.decide(_scenes(1)[0], State.NORMAL)
+    assert worker.submitted == [0.0]

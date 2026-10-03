@@ -203,8 +203,13 @@ class Pipeline:
         journal: Path | None,
         keyframes: KeyframeSaver,
         zone: Zone | None = None,
+        decider: Any = None,  # LiveDecider (modes A / B / cascade); None = A alone
     ) -> None:
+        from sentinel.aggregators.cascade import LiveDecider
+
         self.agents, self.aggregator, self.notifier, self.config = agents, aggregator, notifier, config
+        agg = config.aggregation
+        self.decider = decider or LiveDecider(aggregator, None, "A", config.incidents, agg.g_low, agg.g_high)
         self.source_id, self.keyframes = source_id, keyframes
         self.journal = Path(journal) if journal is not None else None
         if self.journal is not None:
@@ -257,7 +262,7 @@ class Pipeline:
 
     def _close_window(self, scene: SceneDescription) -> list[IncidentEvent]:
         started = time.perf_counter()
-        risk = self.aggregator.assess(scene)
+        risk, decision = self.decider.decide(scene, self.incidents.state)
         events = self.incidents.on_window(scene.window.t_end, risk, scene, self._window.snapshot)
         decision_ms = _ms_since(started)
         for event in events:
@@ -270,6 +275,7 @@ class Pipeline:
                 "t": scene.window.t_end,
                 "scene": scene.model_dump(mode="json"),
                 "risk": risk.model_dump(mode="json"),
+                "decision": decision,
                 "state": self.incidents.state.value,
                 "frame_age_s": None if self._window.last_age_s is None else round(self._window.last_age_s, 3),
                 "timing_ms": timing,
@@ -374,7 +380,30 @@ def build_pipeline(
     agents = build_agents(config)
     keyframes = KeyframeWriter(config.incidents.output_dir, config.incidents.blur_faces)
     aggregator = make_aggregator(config)
-    return Pipeline(agents, aggregator, notifier, config, source_id, run_id, journal, keyframes)
+    decider = make_decider(config, aggregator)
+    return Pipeline(
+        agents, aggregator, notifier, config, source_id, run_id, journal, keyframes, decider=decider
+    )
+
+
+def make_decider(config: Config, aggregator: Any):
+    """Modes A / B / cascade for `sentinel run`. B runs in the background (BWorker, live limits: no waiting);
+    without its API key mode A still works, and B / cascade cannot be chosen."""
+    import os
+    import sys
+
+    from sentinel.aggregators.cascade import LiveDecider
+    from sentinel.aggregators.llm import BWorker, make_b
+
+    agg, llm = config.aggregation, config.llm
+    worker = None
+    if os.environ.get(llm.providers[llm.provider].key_env):
+        worker = BWorker(make_b(config, wait_on_limits=False), maxlen=2, timeout_s=llm.timeout_s)
+    elif agg.mode != "A":
+        raise RuntimeError(f"aggregation mode {agg.mode} needs {llm.providers[llm.provider].key_env} in .env")
+    else:
+        print("aggregator B unavailable (no API key): mode A only", file=sys.stderr)
+    return LiveDecider(aggregator, worker, agg.mode, config.incidents, agg.g_low, agg.g_high)
 
 
 def run_source(config: Config, source: str, paced: bool, results: Path = Path("results")) -> dict:

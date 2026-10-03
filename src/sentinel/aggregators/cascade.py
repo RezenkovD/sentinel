@@ -64,3 +64,41 @@ def simulate(
         run.events += manager.on_window(scene.window.t_end, risk, scene)
     run.events += manager.finish(scenes[-1].window.t_end) if scenes else []
     return run
+
+
+MODES = ("A", "B", "cascade")
+
+
+class LiveDecider:
+    """The risk of each window in `sentinel run`: mode A, B (every window asks B) or cascade. B never blocks:
+    the window takes the newest B answer that has arrived since the previous window, else A — and says so in
+    the journal. `mode` can be switched while running (`/mode` in Telegram)."""
+
+    def __init__(self, a, worker, mode: str, cfg: IncidentsConfig, g_low: float, g_high: float) -> None:
+        if mode not in MODES:
+            raise ValueError(f"aggregation mode must be one of {MODES}, got {mode!r}")
+        self.a, self.worker, self.mode, self.cfg = a, worker, mode, cfg
+        self.g_low, self.g_high = g_low, g_high
+
+    def decide(self, scene: SceneDescription, state: State) -> tuple[RiskResult, dict]:
+        a_result = self.a.assess(scene)
+        info: dict = {"mode": self.mode, "source": "A"}
+        if self.mode == "A" or self.worker is None:
+            return a_result, info
+        if self.mode == "B" or needs_b(a_result.risk, state, self.cfg, self.g_low, self.g_high):
+            self.worker.submit(scene)
+            info["asked_b"] = True
+        arrived = self.worker.take()
+        if arrived:
+            info["b_answers"] = [
+                {"window_end": s.window.t_end, "status": x.status, "latency_s": round(x.latency_s, 2)}
+                for s, x in arrived
+            ]
+        usable = [(s, x) for s, x in arrived if x.status == "ok" and x.result is not None]
+        if usable:
+            s, x = usable[-1]
+            info |= {"source": "B", "b_window_end": s.window.t_end, "a_risk": a_result.risk}
+            return x.result, info
+        if info.get("asked_b") or arrived:
+            info["fallback"] = "no B answer yet" if not arrived else "B answer not usable"
+        return a_result, info

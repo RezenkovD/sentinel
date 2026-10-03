@@ -149,6 +149,12 @@ class LlmConfig(_Section):
         return self
 
 
+class AggregationConfig(_Section):
+    mode: Literal["A", "B", "cascade"]  # switchable while running with /mode
+    g_low: float = Field(ge=0, le=1)  # cascade grey zone of A's risk where B is asked
+    g_high: float = Field(ge=0, le=1)
+
+
 class IncidentsConfig(_Section):
     theta_high: float = Field(gt=0, le=1)
     theta_low: float = Field(ge=0, lt=1)
@@ -202,6 +208,7 @@ class Config(_Section):
     context: ContextConfig
     aggregator_a: AggregatorAConfig
     llm: LlmConfig
+    aggregation: AggregationConfig
     incidents: IncidentsConfig
     baselines: BaselinesConfig
     bench: BenchConfig
