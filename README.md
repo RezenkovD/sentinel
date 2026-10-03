@@ -40,6 +40,21 @@ uv run sentinel run --source 0                     # вебкамера; так�
 uv run sentinel export
 ```
 
+Docker (лише CPU; ваги, дані, результати й `.env` монтуються, в образ не потрапляють):
+
+```bash
+docker build -t sentinel:dev .
+docker run --rm -v "$PWD/weights:/app/weights:ro" --entrypoint pytest sentinel:dev -q   # тести з чистого середовища
+docker run --rm --user "$(id -u):$(id -g)" --env-file .env \
+  -v "$PWD/weights:/app/weights:ro" -v "$PWD/results:/app/results" \
+  sentinel:dev run --source results/sanity_videos/lifecycle_long_gaps.mp4 --paced            # демо з файлу
+docker run --rm --user "$(id -u):$(id -g)" --env-file .env --device /dev/video0 --group-add video \
+  -v "$PWD/weights:/app/weights:ro" -v "$PWD/results:/app/results" sentinel:dev run --source 0  # вебкамера
+```
+
+Часовий пояс образу — `Europe/Kyiv` (повідомлення показують місцевий час; змінити — `-e TZ=…`). Перед першим запуском
+на OpenVINO у теці `weights/` має бути експорт (`sentinel export` на хості або в контейнері з `weights` без `:ro`).
+
 Заміри й перевірки:
 
 ```bash

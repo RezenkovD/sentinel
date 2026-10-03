@@ -1,0 +1,14 @@
+# outside the image: data and artifacts are mounted, secrets come with --env-file
+.git
+.venv
+.env*
+!.env.example
+data
+results
+cache
+weights
+notebooks
+docs
+**/__pycache__
+.pytest_cache
+.ruff_cache
