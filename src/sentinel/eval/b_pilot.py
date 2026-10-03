@@ -104,7 +104,12 @@ def main(argv: list[str] | None = None) -> None:
     for n, w in enumerate(sample, 1):
         answer = b.answer(scenes[w["episode"]][w["window"]])
         rows.append(w | {"key": b.key(scenes[w["episode"]][w["window"]]), "answer": answer})
-        print(f"{n}/{len(sample)} {w['stratum']} {answer.status} cached={answer.cached}", flush=True)
+        note = f" ({answer.error})" if answer.status != "ok" else ""
+        print(f"{n}/{len(sample)} {w['stratum']} {answer.status} cached={answer.cached}{note}", flush=True)
+    for row in rows:  # a second pass for answers that were unavailable (transient provider errors)
+        if row["answer"].status == "unavailable":
+            row["answer"] = b.answer(scenes[row["episode"]][row["window"]])
+            print(f"again {row['key'][:8]} {row['answer'].status}", flush=True)
     # consistency: the first windows of the sample, asked again without the cache (own resumable file)
     repeats_file = out.with_name(out.name + "_repeats.jsonl")
     done: dict[str, list[dict]] = {}
