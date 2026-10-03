@@ -131,6 +131,8 @@ class LlmProviderConfig(_Section):
     tpd: int | None = Field(default=None, ge=1)  # tokens per day
     price_in_per_m: float | None = Field(default=None, ge=0)  # USD per million input tokens
     price_out_per_m: float | None = Field(default=None, ge=0)
+    reasoning_format: Literal["reasoning_effort", "openrouter"] = "reasoning_effort"  # how effort is sent
+    extra_body: dict = Field(default_factory=dict)  # merged into every request (e.g. OpenRouter routing)
 
 
 class LlmConfig(_Section):

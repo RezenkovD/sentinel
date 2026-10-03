@@ -222,3 +222,23 @@ def test_the_experiment_waits_out_a_long_daily_limit(tmp_path: Path):
     b, _, clock = _b(tmp_path, [*limited, _ok(GOOD)])
     assert b.answer(_scene()).status == "ok"
     assert max(clock.slept) <= 600.0 and sum(clock.slept) > 3600.0
+
+
+def test_openrouter_gets_its_reasoning_format_and_a_pinned_provider(tmp_path: Path):
+    """OpenRouter routes to many hosts: the experiment pins one, without fallbacks, so every answer has one
+    origin (decision 03.10, session 05)."""
+    provider = CONFIG.llm.providers["openrouter"]
+    session = FakeSession([_ok(GOOD)])
+    client = LlmClient(provider, "k", session=session, clock=FakeClock(), sleep=lambda s: None)
+    b = BAggregator(
+        CONFIG,
+        client,
+        LlmCache(tmp_path, provider.model, PROMPT),
+        "openrouter",
+        stats=STATS,
+        prompt_version=PROMPT,
+    )
+    assert b.answer(_scene()).status == "ok"
+    body = session.calls[0]
+    assert body["reasoning"] == {"effort": "low"} and "reasoning_effort" not in body
+    assert body["provider"]["allow_fallbacks"] is False and len(body["provider"]["order"]) == 1

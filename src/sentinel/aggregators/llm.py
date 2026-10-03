@@ -235,7 +235,6 @@ class BAggregator:
             "messages": messages,
             "temperature": llm.temperature,
             "max_tokens": llm.max_tokens,
-            "reasoning_effort": llm.reasoning_effort,
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {"name": "risk_result", "strict": True, "schema": SCHEMA},
@@ -245,7 +244,12 @@ class BAggregator:
         }
         if llm.seed is not None:
             body["seed"] = llm.seed
-        return body
+        provider = llm.providers[self.provider]
+        if provider.reasoning_format == "openrouter":
+            body["reasoning"] = {"effort": llm.reasoning_effort}
+        else:
+            body["reasoning_effort"] = llm.reasoning_effort
+        return body | provider.extra_body
 
     def _request(self, messages: list[dict], estimate: int) -> tuple[dict, float]:
         """One request: waiting for the limits as long as it takes (experiment — a daily limit may hold for

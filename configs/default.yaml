@@ -150,6 +150,14 @@ llm:                        # aggregator B (decision 01.10): gpt-oss-120b over O
       tpd: 200000
       price_in_per_m: 0.15  # USD per million tokens (Groq, 03.10)
       price_out_per_m: 0.60
+    openrouter:             # one host pinned, no fallbacks: every answer of an experiment has one origin
+      base_url: https://openrouter.ai/api/v1
+      model: openai/gpt-oss-120b
+      key_env: OPENROUTER_API_KEY
+      reasoning_format: openrouter
+      extra_body: {provider: {order: [deepinfra], allow_fallbacks: false, require_parameters: true}}
+      price_in_per_m: 0.037 # DeepInfra (bf16) via OpenRouter, 03.10
+      price_out_per_m: 0.17
     cerebras:
       base_url: https://api.cerebras.ai/v1
       model: gpt-oss-120b
