@@ -71,10 +71,6 @@ _REASON_GROUP = {  # one phrase per group in an explanation
 }
 
 
-def _num(value: float) -> str:
-    return f"{value:.1f}".replace(".", ",")
-
-
 def quiet_empty(scene: SceneDescription, quiet_motion_area: float) -> bool:
     """Nobody detected and nothing moves: the one case A answers with zero without computing (SPEC §5)."""
     area = scene.summary.motion_area
@@ -123,35 +119,25 @@ def scene_to_features(scene: SceneDescription, config: Config) -> np.ndarray:
 
 
 def _reason(name: str, x: dict[str, float], scene: SceneDescription) -> str | None:
-    if name == "max_limb_accel":
-        return "різкі рухи рук"
-    if name == "max_limb_speed":
-        return f"швидкі рухи рук ({_num(x[name])} зросту/с)"
-    if name == "max_pose_motion":
-        return f"активні рухи тіла ({_num(x[name])} зросту/с)"
-    if name == "pair_max_speed":
-        return f"швидкий рух поруч з іншою людиною ({_num(x[name])} зросту/с)"
-    if name == "max_person_motion":
-        return "інтенсивний рух у рамці людини"
-    if name == "motion_energy":
-        return "багато руху в кадрі"
-    if name == "motion_area":
-        return f"рух на {_num(x[name])} % кадру"
-    if name == "min_distance_h":
-        return f"двоє людей зблизилися до {_num(x[name])} зросту"
-    if name == "max_approach_speed":
-        return f"швидке зближення ({_num(x[name])} зросту/с)"
-    if name == "max_contact_s":
-        return f"тривалий близький контакт ({_num(x[name])} с)"
-    if name == "n_close_pairs":
-        return f"кілька пар упритул ({int(x[name])})"
-    if name in ("crowd_motion", "max_speed"):
-        return f"швидкий рух ({_num(x[name])} зросту/с)"
-    if name == "n_persons":
-        return f"багато людей ({int(x[name])})"
-    if name == "zone_prior":
-        return "зона або час підвищеного ризику"
-    return None
+    """A plain operator phrase for a feature that raised the risk (no units; numbers stay in the journal)."""
+    phrases = {
+        "max_limb_accel": "різкі рухи рук",
+        "max_limb_speed": "швидкі рухи рук",
+        "max_pose_motion": "активні рухи тіла",
+        "pair_max_speed": "швидкий рух поруч з іншою людиною",
+        "max_person_motion": "інтенсивний рух людини",
+        "motion_energy": "багато руху в кадрі",
+        "motion_area": "рух на великій частині кадру",
+        "min_distance_h": "люди дуже близько одне до одного",
+        "max_approach_speed": "люди швидко зближуються",
+        "max_contact_s": "тривалий близький контакт",
+        "n_close_pairs": "кілька пар людей упритул",
+        "crowd_motion": "швидкий рух людей",
+        "max_speed": "швидкий рух людей",
+        "n_persons": "багато людей",
+        "zone_prior": "зона або час підвищеного ризику",
+    }
+    return phrases.get(name)
 
 
 def make_aggregator(config: Config) -> "RulesAggregator":

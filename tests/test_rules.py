@@ -216,8 +216,8 @@ def test_reason_names_the_largest_contributions_in_ukrainian():
         interactions=[_pair(d=0.4, approach=0.2, facing=False, contact=0.0)],
     )
     reason = _aggregator().assess(scene).reason_uk
-    assert "0,4 зросту" in reason and "різкі рухи рук" in reason.lower()
-    assert reason[0].isupper()
+    assert "люди дуже близько одне до одного" in reason.lower() and "різкі рухи рук" in reason.lower()
+    assert reason[0].isupper() and not any(ch.isdigit() for ch in reason)  # plain words for the operator
 
 
 def test_calm_scene_reason_says_so():
