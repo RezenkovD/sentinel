@@ -27,7 +27,10 @@ uv run sentinel run --source 0                     # вебкамера; так�
 ```
 
 `sentinel run` пише журнал вікон у `results/run_<час>.jsonl`, ключові кадри інцидентів — у `results/incidents/<id>/`.
-Без `TELEGRAM_TOKEN` і `TELEGRAM_CHAT_IDS` у `.env` сповіщення йдуть у консоль і `results/incidents.jsonl`.
+Без `TELEGRAM_TOKEN` і `TELEGRAM_CHAT_IDS` у `.env` сповіщення йдуть у консоль і `results/incidents.jsonl`; із ними бот
+приймає команди `/mode A|B|cascade`, `/status`, `/mute 10m` (лише з дозволених чатів).
+Режим агрегації — `aggregation.mode` у конфігу (`A` | `B` | `cascade`); B — `gpt-oss-120b` через Groq, ключ `GROQ_API_KEY`
+у `.env`. Наживо B ніколи не гальмує конвеєр: вікно бере відповідь B, якщо вона вже прийшла, інакше — A.
 Демонстрацію й заміри запускати лише від мережі, у профілі `powerprofilesctl set performance`.
 
 Бекенд моделей за замовчуванням — OpenVINO (`models.backend: openvino`, рішення 30.09). Він потребує разового
@@ -61,7 +64,15 @@ uv run sentinel eval baselines              # пороги baseline_weapon і ba
 
 Кеш описів сцени — `data/episodes/<набір>/<епізод>.jsonl` (поза git): перший рядок — метадані (версії схеми й
 сприйняття, хеш налаштувань), далі рядок на вікно: опис сцени й службове `aux`, якого агрегатори не бачать.
-Повний експеримент (`sentinel eval` для A / B / каскаду) — наступні сесії.
+Агрегатор B і каскад (сесія 05):
+
+```bash
+uv run sentinel eval reference-stats        # «звичайні значення» полів на спокійних вікнах train → промпт B
+uv run sentinel eval b-pilot --prompt b_v1 --per-stratum 15 --repeat-windows 40 --repeats 2   # пілот B на val
+uv run sentinel eval b-pilot --prompt b_v1 --per-stratum 15 --report-only                     # проміжні метрики з кешу
+uv run sentinel eval fsm-tune               # θ_low і M автомата на склейках val
+uv run sentinel eval cascade-grid           # сіра зона каскаду на val (потрібні відповіді B на вікна val)
+```
 
 Налаштування (частота аналізу, розмір входу, пороги, ваги A, автомат інцидентів) — `configs/default.yaml`,
 трекер — `configs/bytetrack.yaml`, зони — `configs/zones.yaml`. Журнал рішень — [`docs/DECISIONS.md`](docs/DECISIONS.md).

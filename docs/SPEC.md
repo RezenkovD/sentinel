@@ -260,11 +260,12 @@ sentinel/
 │   │   ├── pose_features.py   # поза, ознаки особи й пари
 │   │   └── context.py         # профіль зони
 │   ├── aggregators/
-│   │   ├── rules.py           # A: логістична регресія + правило зброї
-│   │   ├── llm.py             # B: промпт, строгий JSON, кеш, тайм-аут
-│   │   └── cascade.py         # сіра зона, асинхронний воркер
+│   │   ├── rules.py           # A: логістична регресія (зброя — лише правило автомата)
+│   │   ├── llm.py             # B: промпт, строгий JSON, кеш, ліміти, фоновий воркер (BWorker)
+│   │   ├── prompts/           # b_v1.md (заморожений), чернетки b_draft*.md, reference_stats.json
+│   │   └── cascade.py         # сіра зона й переходи автомата; симуляція з кешу; режими A / B / cascade наживо
 │   ├── incidents.py           # автомат інцидентів
-│   ├── notify/telegram.py     # sendPhoto / editMessageCaption / команди
+│   ├── notify/                # telegram.py — sendPhoto / editMessageCaption / mute; commands.py — /mode /status /mute
 │   ├── pipeline.py            # складає все в конвеєр, метрики реального часу
 │   ├── bench.py               # замір швидкості: мс/кадр, RTF, реальний час (paced)
 │   ├── models.py              # ваги за бекендом: .pt або експорт OpenVINO (sentinel export)

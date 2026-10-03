@@ -92,6 +92,9 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--repeats", type=int, default=2, help="extra answers for each of those windows")
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--out", type=Path)
+    parser.add_argument(
+        "--report-only", action="store_true", help="metrics of the answers cached so far, no calls"
+    )
     args = parser.parse_args(argv)
     config = load_config(args.config)
     val = load_episodes(args.episodes, "rwf2000", ["val"])
@@ -102,21 +105,25 @@ def main(argv: list[str] | None = None) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     rows = []
     for n, w in enumerate(sample, 1):
-        answer = b.answer(scenes[w["episode"]][w["window"]])
+        scene = scenes[w["episode"]][w["window"]]
+        if args.report_only:
+            if b.cache.get(b.key(scene)) is not None:
+                rows.append(w | {"key": b.key(scene), "answer": b.answer(scene)})
+            continue
+        answer = b.answer(scene)
         rows.append(w | {"key": b.key(scenes[w["episode"]][w["window"]]), "answer": answer})
         note = f" ({answer.error})" if answer.status != "ok" else ""
         print(f"{n}/{len(sample)} {w['stratum']} {answer.status} cached={answer.cached}{note}", flush=True)
+    if args.report_only:
+        write_report(out.with_name(out.name + "_interim"), args, rows, _repeats(out))
+        return
     for row in rows:  # a second pass for answers that were unavailable (transient provider errors)
         if row["answer"].status == "unavailable":
             row["answer"] = b.answer(scenes[row["episode"]][row["window"]])
             print(f"again {row['key'][:8]} {row['answer'].status}", flush=True)
     # consistency: the first windows of the sample, asked again without the cache (own resumable file)
     repeats_file = out.with_name(out.name + "_repeats.jsonl")
-    done: dict[str, list[dict]] = {}
-    if repeats_file.exists():
-        for line in repeats_file.read_text(encoding="utf-8").splitlines():
-            r = json.loads(line)
-            done.setdefault(r["key"], []).append(r)
+    done = _repeats(out)
     for row in rows[: args.repeat_windows]:
         scene = scenes[row["episode"]][row["window"]]
         while len(done.get(row["key"], [])) < args.repeats:
@@ -133,6 +140,16 @@ def main(argv: list[str] | None = None) -> None:
             done.setdefault(row["key"], []).append(record)
             print(f"repeat {row['key'][:8]} {again.status}", flush=True)
     write_report(out, args, rows, done)
+
+
+def _repeats(out: Path) -> dict[str, list[dict]]:
+    path = out.with_name(out.name + "_repeats.jsonl")
+    done: dict[str, list[dict]] = {}
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            record = json.loads(line)
+            done.setdefault(record["key"], []).append(record)
+    return done
 
 
 def write_report(out: Path, args, rows: list[dict], repeats: dict[str, list[dict]]) -> dict:
