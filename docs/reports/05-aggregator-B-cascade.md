@@ -331,6 +331,22 @@
 
 **B на 120 кліпах val:** 180 з 600 вікон (179 ok, 1 недоступне); безкоштовний Groq — ще ≈ 3 доби (≈ 07–08.10).
 
+
+## 11b. Демо для захисту (04.10)
+
+Рішення Дмитра 04.10: працюємо лише безкоштовно, мета — переконливо показати систему. `sentinel demo` проганяє кліп
+через справжній конвеєр (режим A, реальні повідомлення в Telegram) і пише MP4: обличчя розмиті, учасники
+інциденту — зеленим, сторонні — тонко сірим, зброя — червоним; угорі — стан автомата, ризик вікна, хто вирішив і
+годинник; праворуч — текст останнього повідомлення Telegram. Відео з людьми з наборів даних — поза git.
+
+| Сценарій | Джерело | Результат |
+|---|---|---|
+| 1. Бійка | склейка `lifecycle_long_gaps` (кліпи RWF) | 2 інциденти: «🔴 Ймовірна бійка», через 6–7 с після бійки — «✅ Завершено» |
+| 2. Зброя в руці | Севілья `Cam5-From09-47-49To09-48-30` (2 кадри/с) | 1 інцидент: «🔴 Зброя в руці — Камера 2 — хол», власник виділений, «Оцінка: зброю підтверджено у 2 вікнах поспіль»; закриття за 8 с |
+| 3. Спокій із людьми | 6 спокійних кліпів val (3–10 людей, макс. ризик A ≤ 0,32), 30 с | тривог немає |
+
+Повідомлення всіх трьох сценаріїв надіслано на телефон Дмитра; відео — `results/demo/*_h264.mp4`.
+
 ## 12. Як відтворити
 
 ```bash
@@ -341,6 +357,8 @@ uv run sentinel eval reference-stats                                 # дові�
 uv run sentinel eval b-pilot --prompt b_v1 --per-stratum 15 --repeat-windows 40 --repeats 2
 uv run sentinel eval b-pilot --prompt b_v1 --per-stratum 15 --report-only
 uv run sentinel eval cascade-grid                                    # коли будуть відповіді B на val
+uv run sentinel demo --source results/sanity_videos/lifecycle_long_gaps.mp4 --out results/demo/1_fight.mp4 --label "Камера 1"
+uv run sentinel demo --sevilla Cam5-From09-47-49To09-48-30_x264 --out results/demo/2_weapon.mp4 --label "Камера 2 — хол"
 uv run sentinel --config <конфіг із aggregation.mode: B> run --source results/sanity_videos/lifecycle_one_minute.mp4 --paced
 ```
 

@@ -40,6 +40,13 @@ uv run sentinel run --source 0                     # вебкамера; так�
 uv run sentinel export
 ```
 
+Демо-відео для захисту (кліп зі станом, ризиком, учасниками й текстом повідомлення Telegram; обличчя розмиті):
+
+```bash
+uv run sentinel demo --source results/sanity_videos/lifecycle_long_gaps.mp4 --out results/demo/1_fight.mp4 --label "Камера 1"
+uv run sentinel demo --sevilla Cam5-From09-47-49To09-48-30_x264 --out results/demo/2_weapon.mp4 --label "Камера 2 — хол"
+```
+
 Docker (лише CPU; ваги, дані, результати й `.env` монтуються, в образ не потрапляють):
 
 ```bash
