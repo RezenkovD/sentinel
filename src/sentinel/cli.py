@@ -26,6 +26,7 @@ EVAL_COMMANDS = {
     "cascade-grid": ("cascade_grid", True),
     "b-run": ("b_run", True),
     "experiment": ("experiment", True),
+    "protocol": ("protocol", True),
 }
 
 
