@@ -284,6 +284,10 @@ def render(env: dict, tests: dict, rows: list[dict], started: str, telegram: boo
     lat = [r["latency_p95_ms"] for r in rows]
     lines += [
         "",
+        "«Пропущено» — частка кадрів джерела, яких аналіз не бере за задумом: читач віддає найсвіжіший кадр "
+        "із частотою аналізу 10 кадрів/с, тож для джерела 30 кадрів/с це ≈ 66 %, для 24–25 кадрів/с — "
+        "≈ 58 %. Затримка — від моменту появи кадру до кінця його аналізу.",
+        "",
         f"Разом: RTF {_n(min(rtf))}–{_n(max(rtf))} (сер. {_n(float(np.mean(rtf)))}); затримка p95 до "
         f"{max(lat):.0f} мс; очікуваний результат — у {len(ok)} з {len(rows)} кліпів.",
         "",
@@ -327,7 +331,15 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--out", type=Path, default=Path(f"results/protocol_{date.today().isoformat()}.md"))
     parser.add_argument("--telegram", action="store_true", help="send the real messages to the bot in .env")
     parser.add_argument("--skip-tests", action="store_true")
+    parser.add_argument("--from-json", type=Path, help="re-render the protocol of an earlier run, no new run")
     args = parser.parse_args(argv)
+    if args.from_json is not None:
+        data = json.loads(args.from_json.read_text(encoding="utf-8"))
+        started = data.get("started", "—")
+        text = render(data["environment"], data["tests"], data["clips"], started, data.get("telegram", False))
+        args.out.write_text(text, encoding="utf-8")
+        print(args.out)
+        return
     config = load_config(args.config)
     started = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
     env = environment(config)
@@ -358,7 +370,17 @@ def main(argv: list[str] | None = None) -> None:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(render(env, tests, rows, started, args.telegram), encoding="utf-8")
     args.out.with_suffix(".json").write_text(
-        json.dumps({"environment": env, "tests": tests, "clips": rows}, ensure_ascii=False, indent=1),
+        json.dumps(
+            {
+                "environment": env,
+                "tests": tests,
+                "clips": rows,
+                "started": started,
+                "telegram": args.telegram,
+            },
+            ensure_ascii=False,
+            indent=1,
+        ),
         encoding="utf-8",
     )
     print(args.out)
