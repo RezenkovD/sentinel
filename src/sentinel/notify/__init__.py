@@ -61,11 +61,12 @@ def caption(event: IncidentEvent, place: str = "Камера", origin: float | N
     when = (
         _clock(event.t, origin) + (f" · триває {seconds} с" if seconds else "") + f" · ≈ {event.people} людей"
     )
+    sure = "зброю підтверджено у 2 вікнах поспіль" if event.weapon else _sureness(event.max_risk)
     lines = [
         head,
         when,
         event.reason_uk,
-        f"Оцінка: {_sureness(event.max_risk)} · рішення: {event.decided_by}",
+        f"Оцінка: {sure} · рішення: {event.decided_by}",
     ]
     return "\n".join(lines)[:CAPTION_LIMIT]
 

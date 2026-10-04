@@ -251,7 +251,10 @@ def test_the_caption_reads_like_an_operator_message():
     ongoing = caption(_event("update", t=25.0, max_risk=0.95), place="Вхід", origin=origin)
     assert ongoing.splitlines()[1] == "14:32:25 · триває 22 с · ≈ 2 людей" and "висока" in ongoing
     armed = caption(_event("open", weapon=True), place="Вхід", origin=origin)
-    assert armed.startswith("🔴 Зброя в руці — Вхід")
+    assert (
+        armed.startswith("🔴 Зброя в руці — Вхід")
+        and "Оцінка: зброю підтверджено у 2 вікнах поспіль" in armed
+    )
     closed = caption(_event("close", t=45.0), place="Вхід", origin=origin)
     assert closed.splitlines()[0] == "✅ Завершено о 14:32:45 (42 с) — Вхід"
 

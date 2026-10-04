@@ -31,7 +31,8 @@ _WEAPON_UK = {"gun": "вогнепальна зброя", "knife": "ніж"}
 def weapon_reason(scene: SceneDescription, reason_uk: str) -> str:
     """An alarm raised by a confirmed weapon names it first, whatever the aggregator said (decision 01.10)."""
     kinds = sorted({p.holds for p in scene.persons if p.holds})
-    return "Зброя в руці: " + ", ".join(_WEAPON_UK.get(k, k) for k in kinds) + "; " + reason_uk
+    tail = reason_uk[:1].lower() + reason_uk[1:]  # one sentence: the aggregator's phrase follows a semicolon
+    return "Зброя в руці: " + ", ".join(_WEAPON_UK.get(k, k) for k in kinds) + "; " + tail
 
 
 KeyframeSaver = Callable[..., Path | None]  # (incident_id, name, snapshot, highlight=participants)

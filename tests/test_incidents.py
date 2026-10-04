@@ -100,6 +100,18 @@ def test_a_weapon_alarm_names_the_weapon_first_whatever_the_aggregator_said():
     manager, _ = _manager()
     events = _feed(manager, [0.3, 0.3, 0.9], holds_at={0, 1, 2})
     assert events[0].reason_uk.startswith("Зброя в руці: вогнепальна зброя; ризик 0.3")
+    upper = IncidentManager(BASE, "cam-1", lambda *_, **__: None, "run")
+    upper.on_window(
+        1.0,
+        RiskResult(risk=0.3, level="normal", reason_uk="Рух на великій частині кадру"),
+        _scene(1.0, holds="gun"),
+    )
+    opened = upper.on_window(
+        2.0,
+        RiskResult(risk=0.3, level="normal", reason_uk="Рух на великій частині кадру"),
+        _scene(2.0, holds="gun"),
+    )
+    assert opened[0].reason_uk == "Зброя в руці: вогнепальна зброя; рух на великій частині кадру"
     update = manager.on_window(13.0, _risk(0.95), _scene(13.0, holds="gun"))  # a higher risk later
     assert update[0].reason_uk.startswith("Зброя в руці: вогнепальна зброя")
 
