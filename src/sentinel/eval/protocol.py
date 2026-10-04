@@ -15,8 +15,10 @@ import json
 import os
 import platform
 import random
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import date, datetime
 from pathlib import Path
@@ -49,19 +51,58 @@ XD_CLIPS = (
 )
 
 
-def protocol_clips(splits: Path = Path("data/splits/rwf2000.json"), per_class: int = 3) -> list[tuple]:
+def protocol_clips(
+    splits: Path = Path("data/splits/rwf2000.json"), per_class: int = 3, chain: int = 3
+) -> list[tuple[str, list[Path], bool]]:
+    """(scenario, clips played back to back, an incident is expected). An RWF clip lasts 5 s — too short for
+    the automaton (k of n windows), so each RWF case is the first `chain` test segments of one source video,
+    15 s of the same scene; sources are drawn with the seed (trial of 04.10: single 5-s fights opened
+    nothing)."""
+    import re
+
     test = json.loads(splits.read_text(encoding="utf-8"))["test"]
     rng = random.Random(SEED)
-    fights = rng.sample(sorted(p for p in test if "/Fight/" in p), per_class)
-    calm = rng.sample(sorted(p for p in test if "/NonFight/" in p), per_class)
     rwf = Path("data/raw/rwf2000")
+
+    def chains(kind: str) -> list[list[Path]]:
+        by: dict[str, list[tuple[int, str]]] = {}
+        for path in test:
+            if m := re.search(rf"/{kind}/(.+)_(\d+)\.avi$", path):
+                by.setdefault(m.group(1), []).append((int(m.group(2)), path))
+        sources = sorted(k for k, v in by.items() if len(v) >= chain)
+        return [[rwf / p for _, p in sorted(by[k])[:chain]] for k in rng.sample(sources, per_class)]
+
     return (
-        [("бійка", rwf / p, True) for p in fights]
-        + [XD_CLIPS[0]]
-        + list(XD_CLIPS[1:3])
-        + [("спокій", rwf / p, False) for p in calm]
-        + [XD_CLIPS[3]]
+        [("бійка", c, True) for c in chains("Fight")]
+        + [(XD_CLIPS[0][0], [XD_CLIPS[0][1]], XD_CLIPS[0][2])]
+        + [(s, [c], e) for s, c, e in XD_CLIPS[1:3]]
+        + [("спокій", c, False) for c in chains("NonFight")]
+        + [(XD_CLIPS[3][0], [XD_CLIPS[3][1]], XD_CLIPS[3][2])]
     )
+
+
+def joined(clips: list[Path], folder: Path) -> Path:
+    """One clip, or several played back to back as one video (the first clip's size and frame rate)."""
+    import cv2
+
+    if len(clips) == 1:
+        return clips[0]
+    out = folder / f"{clips[0].stem.rsplit('_', 1)[0]}_x{len(clips)}.mp4"
+    writer = None
+    for clip in clips:
+        capture = cv2.VideoCapture(str(clip))
+        while True:
+            ok, frame = capture.read()
+            if not ok:
+                break
+            if writer is None:
+                size = frame.shape[1::-1]
+                fps = capture.get(cv2.CAP_PROP_FPS) or 30.0
+                writer = cv2.VideoWriter(str(out), cv2.VideoWriter_fourcc(*"mp4v"), fps, size)
+            writer.write(cv2.resize(frame, size))
+        capture.release()
+    writer.release()
+    return out
 
 
 def environment(config: Config) -> dict:
@@ -208,8 +249,10 @@ def render(env: dict, tests: dict, rows: list[dict], started: str, telegram: boo
         f"(заморожені секції — `{env['frozen_config_sha256'][:16]}…`).",
         f"- Агрегатор A v1.1: SHA-256 `{env['a_sha256']}`.",
         "- Ваги: " + "; ".join(f"{k} `{v[:16]}…`" for k, v in env["weights_sha256"].items()) + ".",
-        "- Тестові відео: тестова частина RWF-2000 (3 бійки, 3 спокійні, вибрано з seed 2026) і XD-Violence "
-        "(бійка, 2 стрілянини, нормальне відео); жоден параметр на них не підбирався.",
+        "- Тестові відео: тестова частина RWF-2000 — 3 бійки й 3 спокійні сцени, кожна — 3 сегменти одного "
+        "відео поспіль (15 с; відео вибрано з seed 2026), і XD-Violence (бійка, 2 стрілянини, нормальне "
+        "відео); "
+        "жоден параметр на них не підбирався.",
         "",
         "## 4. Порядок",
         "",
@@ -299,8 +342,10 @@ def main(argv: list[str] | None = None) -> None:
         origin=origin,
     )
     rows = []
+    folder = Path(tempfile.mkdtemp(prefix="protocol_"))
     try:
-        for scenario, clip, expected in protocol_clips():
+        for scenario, clips, expected in protocol_clips():
+            clip = joined(clips, folder)
             row = {"scenario": scenario, "clip": clip.name, "expected": expected} | run_clip(
                 config, clip, notifier, origin
             )
@@ -308,6 +353,7 @@ def main(argv: list[str] | None = None) -> None:
             print(json.dumps(row, ensure_ascii=False), flush=True)
     finally:
         notifier.close()
+        shutil.rmtree(folder, ignore_errors=True)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(render(env, tests, rows, started, args.telegram), encoding="utf-8")
     args.out.with_suffix(".json").write_text(

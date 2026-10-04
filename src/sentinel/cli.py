@@ -27,6 +27,7 @@ EVAL_COMMANDS = {
     "b-run": ("b_run", True),
     "experiment": ("experiment", True),
     "protocol": ("protocol", True),
+    "thesis-pack": ("thesis_pack", True),
 }
 
 

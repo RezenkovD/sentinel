@@ -6,10 +6,13 @@
 The clip runs through the real pipeline (the configured mode, real notifications when the bot is set up);
 every analysed frame is written with blurred faces, the incident's participants in green and bystanders faint,
 weapons in red, a banner with the automaton's state and the window risk, and on the right the text of the last
-Telegram message. The output holds people from research datasets: it is not committed and not published.
+Telegram message. Next to the video, `<out>.events.json` lists every message with its frame number and key
+frame (the thesis pack takes its screens from it). The output holds people from research datasets: it is not
+committed and not published.
 """
 
 import argparse
+import json
 import os
 import time
 from pathlib import Path
@@ -142,13 +145,14 @@ def main(argv: list[str] | None = None) -> None:
     else:
         frames = iter(LatestFrameReader(args.source, "offline", target_fps=config.analysis.fps))
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    writer, card, incidents = None, None, 0
+    writer, card, incidents, written, log = None, None, 0, 0, []
     try:
         for frame in frames:
             events = pipeline.process(frame)
             for event in events:
                 card = caption(event, label, origin)
                 incidents += event.kind == "open"
+                log.append(_logged(event, card, written))
             found = pipeline.last_found
             incident = pipeline.incidents.current
             image = render_keyframe(
@@ -176,8 +180,10 @@ def main(argv: list[str] | None = None) -> None:
                     str(args.out), cv2.VideoWriter_fourcc(*"mp4v"), fps, out.shape[1::-1]
                 )
             writer.write(out)
+            written += 1
         for event in pipeline.finish():
             card = caption(event, label, origin)
+            log.append(_logged(event, card, written))
         if writer is not None and card:  # hold the final message for two seconds
             for _ in range(int(2 * config.analysis.fps)):
                 writer.write(compose(image, "норма", None, "A", frame.t, card, origin))
@@ -185,7 +191,26 @@ def main(argv: list[str] | None = None) -> None:
         if writer is not None:
             writer.release()
         notifier.close()
+    args.out.with_suffix(".events.json").write_text(
+        json.dumps(
+            {"source": args.source or args.sevilla, "label": label, "events": log},
+            ensure_ascii=False,
+            indent=1,
+        ),
+        encoding="utf-8",
+    )
     print(f"{args.out}: {incidents} incident(s)")
+
+
+def _logged(event, text: str, frame: int) -> dict:
+    return {
+        "frame": frame,
+        "kind": event.kind,
+        "t": round(event.t, 1),
+        "weapon": event.weapon,
+        "text": text,
+        "keyframe": str(event.keyframe) if event.keyframe else None,
+    }
 
 
 if __name__ == "__main__":
