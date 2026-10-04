@@ -82,12 +82,13 @@ def protocol_clips(
 
 
 def joined(clips: list[Path], folder: Path) -> Path:
-    """One clip, or several played back to back as one video (the first clip's size and frame rate)."""
+    """One clip, or several played back to back as one video (the first clip's size and frame rate), written
+    losslessly (FFV1): a lossy re-encode changes the motion the pipeline sees (trial 2 of 04.10)."""
     import cv2
 
     if len(clips) == 1:
         return clips[0]
-    out = folder / f"{clips[0].stem.rsplit('_', 1)[0]}_x{len(clips)}.mp4"
+    out = folder / f"{clips[0].stem.rsplit('_', 1)[0]}_x{len(clips)}.mkv"
     writer = None
     for clip in clips:
         capture = cv2.VideoCapture(str(clip))
@@ -98,7 +99,7 @@ def joined(clips: list[Path], folder: Path) -> Path:
             if writer is None:
                 size = frame.shape[1::-1]
                 fps = capture.get(cv2.CAP_PROP_FPS) or 30.0
-                writer = cv2.VideoWriter(str(out), cv2.VideoWriter_fourcc(*"mp4v"), fps, size)
+                writer = cv2.VideoWriter(str(out), cv2.VideoWriter_fourcc(*"FFV1"), fps, size)
             writer.write(cv2.resize(frame, size))
         capture.release()
     writer.release()
