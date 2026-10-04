@@ -1,0 +1,85 @@
+{
+ "date": "2026-10-04T22:58:48",
+ "commit": "3ed5f9d",
+ "state": {
+  "config": {
+   "sections": [
+    "analysis",
+    "models",
+    "weapons",
+    "features",
+    "motion",
+    "context",
+    "aggregator_a",
+    "incidents",
+    "baselines"
+   ],
+   "sha256": "1a7f672d63c3e410ef92364e095412c24f8449eeb333cd0e7b404b761b5de99e"
+  },
+  "zones_sha256": "730676ace7aecf498f0b5bca1e5ac532de99598921d4c63b062ffb5d1e0f68b9",
+  "aggregator_a": {
+   "path": "weights/aggregator_a/a_v1_1_all.json",
+   "sha256": "5943d3280bfca0521b02dd2a7fe0f1577bedb261247392b185c01c045806dbf3",
+   "episode_rule": "mean",
+   "episode_threshold": 0.45
+  },
+  "weights_sha256": {
+   "people": "0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1",
+   "pose": "eb3bb8268828aeaf515cec23a4bfafd793944a86fe9af94ba7823609c14522a9",
+   "weapons": "0a96416a2f22cec4a3cc0232747a4ed98edb6fa6b4deb8978dd8c7ba7d944934"
+  },
+  "perceptions": {
+   "rwf2000": [
+    "3.0:ad09b92cb6f6d8ed"
+   ],
+   "us_gun": [
+    "3.0:b28cda67b20ff220"
+   ],
+   "xd": [
+    "3.0:ad09b92cb6f6d8ed",
+    "3.1:ad09b92cb6f6d8ed"
+   ]
+  },
+  "caches": {
+   "rwf2000/val": {
+    "files": 320,
+    "sha256": "08a2adbaf08f8832b7470044c792dcc8bd5ed68bc3a4399e14873a58cb031561"
+   },
+   "rwf2000/test": {
+    "files": 400,
+    "sha256": "894b1f57ef45d0e38e9d821375a0abf73071fc6af9a5c2d1413c8ac0379bb9e0"
+   },
+   "us_gun/select": {
+    "files": 13,
+    "sha256": "d54bac85646e8855f59c50d1eaf968094150e5e368a31b90c9e9708a82b71626"
+   },
+   "us_gun/test": {
+    "files": 7,
+    "sha256": "3c6b406baf0670cdecb5a71898fffd4104981eb05fa328bd8242a49e9c5fc770"
+   },
+   "xd/test": {
+    "files": 156,
+    "sha256": "1d50bce944dbdcdef133ecc2c52d94be0d120c8e1f9cbf5c0d2bf2cdb18296e3"
+   }
+  },
+  "automaton": {
+   "theta_high": 0.71,
+   "theta_low": 0.65,
+   "k": 3,
+   "n": 5,
+   "quiet_s": 5.0,
+   "merge_after_close_s": 30.0,
+   "weapon_confirm_windows": 2
+  },
+  "baselines": {
+   "motion_tau": 2.14,
+   "weapon_tau": 0.3
+  },
+  "weapon_mode": {
+   "mode": "frame",
+   "imgsz": 480,
+   "every_n_frames": 2,
+   "conf": 0.3
+  }
+ }
+}
