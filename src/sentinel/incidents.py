@@ -135,6 +135,11 @@ class IncidentManager:
         self.last_incident_id: str | None = None
         self._decided_by = "A"
 
+    @property
+    def current(self) -> "Incident | None":
+        """The incident open right now (ALARM or COOLDOWN), if any."""
+        return self._incident
+
     def on_window(
         self,
         t: float,

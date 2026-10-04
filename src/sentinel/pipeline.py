@@ -226,9 +226,13 @@ class Pipeline:
         self.windows = 0
         self.last_timing_ms: dict[str, float] = {}
         self._last_t = 0.0
+        self.last_found: FrameResult | None = None  # people, poses and weapons of the last frame (demo video)
+        self.last_risk: RiskResult | None = None  # risk of the last closed window
+        self.last_decision: dict = {}
 
     def process(self, frame: Frame, age_s: float | None = None) -> list[IncidentEvent]:
         scene, _, found = self.perception.process(frame)
+        self.last_found = found
         events = []
         started = time.perf_counter()
         if scene is not None:
@@ -263,6 +267,7 @@ class Pipeline:
     def _close_window(self, scene: SceneDescription) -> list[IncidentEvent]:
         started = time.perf_counter()
         risk, decision = self.decider.decide(scene, self.incidents.state)
+        self.last_risk, self.last_decision = risk, decision
         events = self.incidents.on_window(
             scene.window.t_end, risk, scene, self._window.snapshot, decided_by=decision["source"]
         )

@@ -52,6 +52,11 @@ def build_parser() -> argparse.ArgumentParser:
     ev.add_argument("name", help=", ".join(EVAL_COMMANDS))
     ev.add_argument("rest", nargs=argparse.REMAINDER, help="arguments of the eval script")
 
+    demo = sub.add_parser("demo", help="demo video: the clip with incident state, risk and Telegram card")
+    demo.add_argument(
+        "rest", nargs=argparse.REMAINDER, help="--source <video> | --sevilla <segment>, --out …"
+    )
+
     sub.add_parser("export", help="export the config's models to OpenVINO (skipped while up to date)")
 
     bench = sub.add_parser("bench", help="measure processing speed (ms/frame, RTF)")
@@ -100,10 +105,18 @@ def main(argv: list[str] | None = None) -> int:
     import signal
     import sys
 
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args, unknown = parser.parse_known_args(argv)  # `demo` passes its own options on
+    if unknown and args.command != "demo":
+        parser.error(f"unrecognized arguments: {' '.join(unknown)}")
     # `systemctl stop` / `docker stop` send SIGTERM: turn it into SystemExit so that every `finally` runs
     # (a paused extraction is resumed, open incidents are closed, pid files are removed)
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
+    if args.command == "demo":
+        from sentinel.demo import main as demo_main
+
+        demo_main([*unknown, *args.rest, "--config", str(args.config)])
+        return 0
     if args.command == "eval":
         module, script_argv = eval_command(args.name, args.rest, args.config)
         result = importlib.import_module(module).main(script_argv)
