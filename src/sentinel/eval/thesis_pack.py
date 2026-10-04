@@ -42,6 +42,14 @@ def _date(path: Path) -> str:
     return datetime.fromtimestamp(path.stat().st_mtime).strftime("%d.%m.%Y") if path.exists() else "—"
 
 
+def _mtime(path: Path) -> float:
+    return path.stat().st_mtime
+
+
+def _pct(share: float) -> str:
+    return f"{100 * share:.1f}".replace(".", ",") + " %"
+
+
 def _n(value, digits: int = 3) -> str:
     if value is None:
         return "—"
@@ -123,7 +131,7 @@ def speed(numbers: Numbers) -> list[dict]:
                     f"RTF {_n(r['rtf'], 2)}; {_n(r['total_ms']['mean_ms'], 1)} мс/кадр",
                     p,
                 )
-    protocol = sorted(RESULTS.glob("protocol_*.json"))
+    protocol = sorted((p for p in RESULTS.glob("protocol_*.json") if "_trial" not in p.name), key=_mtime)
     if protocol:
         clips = json.loads(protocol[-1].read_text())["clips"]
         numbers.add(
@@ -220,7 +228,7 @@ def quality(numbers: Numbers) -> None:
             "Dev (Севілья Cam1 + Cam5), кадр 480:2, 2 вікна поспіль: повнота сегментів; медіана часу; "
             "NonFight train з тривогою",
             f"{_n(r['recall'])}; {_n(r['median_time_to_alarm_s'], 1)} с; "
-            f"{r['rwf_nonfight_false_alarm_share']:.1%}",
+            f"{_pct(r['rwf_nonfight_false_alarm_share'])}",
             RESULTS / "weapon_rule_2026-09-30.json",
         )
     sweep = _json(RESULTS / "weapon_crops_sweep_2026-10-03.json")
@@ -229,7 +237,7 @@ def quality(numbers: Numbers) -> None:
         numbers.add(
             "Dev, вирізки 320:2, поріг 0,50 (не обрано — швидкість)",
             f"повнота {_n(r['recall'])}; {_n(r['median_time_to_alarm_s'], 1)} с; "
-            f"хибних {r['rwf_nonfight_false_alarm_share']:.1%}",
+            f"хибних {_pct(r['rwf_nonfight_false_alarm_share'])}",
             RESULTS / "weapon_crops_sweep_2026-10-03.json",
         )
     sev = _json(EXPERIMENT / "sevilla_test.json")
@@ -240,7 +248,7 @@ def quality(numbers: Numbers) -> None:
                 f"Test (Cam7), {title}: повнота сегментів; медіана часу; хибних на год; "
                 "RWF test NonFight з тривогою",
                 f"{_ci(r['recall'], r['recall_ci'], 2)}; {_n(r['median_time_to_alarm_s'], 1)} с; "
-                f"{_n(r['false_per_h'], 1)}; {r['rwf_nonfight_alarm']['share']:.1%}",
+                f"{_n(r['false_per_h'], 1)}; {_pct(r['rwf_nonfight_alarm']['share'])}",
                 EXPERIMENT / "sevilla_test.json",
             )
     xd = _json(EXPERIMENT / "xd_test.json")
@@ -277,7 +285,7 @@ def automaton(numbers: Numbers, config: Config) -> None:
         b = fsm["best"]
         numbers.add(
             "Підбір θ_low і M на склейках val: опрацьовано бійок; хибних інцидентів на год",
-            f"{b['handled']:.0%}; {_n(b['calm_incidents_per_h'], 1)}",
+            f"{100 * b['handled']:.0f} %; {_n(b['calm_incidents_per_h'], 1)}",
             RESULTS / "fsm_tuning_2026-09-30.json",
         )
 
@@ -289,7 +297,9 @@ def aggregator_b(numbers: Numbers) -> None:
         m = pilot["metrics"]
         source = RESULTS / "b_pilot_b_v1.json"
         numbers.add(
-            "Пілот b_v1: вікон, валідних відповідей", f"{m['windows']}, {m['valid_share']:.0%}", source
+            "Пілот b_v1: вікон, валідних відповідей",
+            f"{m['windows']}, {100 * m['valid_share']:.0f} %",
+            source,
         )
         numbers.add(
             "Пілот: AUC вікон B / A на тих самих вікнах",
@@ -310,7 +320,7 @@ def aggregator_b(numbers: Numbers) -> None:
         c = m["consistency"]
         numbers.add(
             "Узгодженість повторів (40 вікон): σ ризику, збіг рівня",
-            f"{_n(c['risk_std_mean'])}, {c['level_agreement']:.0%}",
+            f"{_n(c['risk_std_mean'])}, {100 * c['level_agreement']:.0f} %",
             source,
         )
     log = RESULTS / "b_run_val120.log"
@@ -415,7 +425,15 @@ def figures(folder: Path) -> list[str]:
     missing = []
     names = {"A": "Агрегатор A", "baseline_motion": "Рух (базовий)", "baseline_weapon": "Зброя (базовий)"}
 
+    from matplotlib.ticker import FuncFormatter, ScalarFormatter
+
+    comma = FuncFormatter(lambda v, _: f"{v:g}".replace(".", ","))  # Ukrainian decimal comma on numeric axes
+
     def save(fig, name: str) -> None:
+        for ax in fig.axes:
+            for axis in (ax.xaxis, ax.yaxis):
+                if isinstance(axis.get_major_formatter(), ScalarFormatter):
+                    axis.set_major_formatter(comma)
         fig.tight_layout()
         fig.savefig(folder / f"{name}.png", facecolor="white")
         plt.close(fig)

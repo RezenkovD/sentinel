@@ -1,6 +1,6 @@
 """Demo video for the defence: the analysed clip with the incident state, the risk and the Telegram card.
 
-    uv run sentinel demo --source results/sanity_videos/lifecycle_long_gaps.mp4 --out results/demo/fight.mp4
+    uv run sentinel demo --source <calm>.avi <fight>.avi … --out results/demo/1_fight.mp4   # see docs/demo.md
     uv run sentinel demo --sevilla Cam5-From09-47-49To09-48-30_x264 --out results/demo/weapon.mp4 --label Хол
 
 The clip runs through the real pipeline (the configured mode, real notifications when the bot is set up);
@@ -109,12 +109,41 @@ def sevilla_clip(segment: str, images: Path = Path("data/raw/us-gun/Images")):
         yield Frame(image=cv2.imread(str(path)), t=t, index=i)
 
 
+def chained(sources: list[str], fps: float):
+    """Frames of several files back to back, decoded from the originals (no re-encoding, which would change
+    the motion), each file's times shifted to follow the previous one."""
+    from dataclasses import replace
+
+    from sentinel.io.source import LatestFrameReader
+
+    offset, index = 0.0, 0
+    for source in sources:
+        last = 0.0
+        with LatestFrameReader(source, "offline", target_fps=fps) as reader:
+            for frame in reader:
+                last = frame.t
+                yield replace(frame, t=frame.t + offset, index=index)
+                index += 1
+        offset += last + 1.0 / fps
+
+
+def hide(image: np.ndarray, boxes: list[list[float]]) -> np.ndarray:
+    """The rendered frame with these boxes (x0 y0 x1 y1, shares of the size) blurred away — a camera's own
+    on-screen text (name, clock). Only the output is touched: the pipeline sees the original frame."""
+    h, w = image.shape[:2]
+    out = image.copy()
+    for x0, y0, x1, y1 in boxes:
+        a, b, c, d = int(x0 * w), int(y0 * h), int(x1 * w), int(y1 * h)
+        if c > a and d > b:
+            out[b:d, a:c] = cv2.GaussianBlur(out[b:d, a:c], (0, 0), sigmaX=max(3.0, (d - b) / 3))
+    return out
+
+
 def main(argv: list[str] | None = None) -> None:
     from dotenv import find_dotenv, load_dotenv
 
     from sentinel.config import DEFAULT_CONFIG, load_config
     from sentinel.eval.extract import dataset_config
-    from sentinel.io.source import LatestFrameReader
     from sentinel.keyframe import render_keyframe
     from sentinel.notify import caption, make_notifier
     from sentinel.pipeline import build_pipeline
@@ -122,11 +151,20 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     source = parser.add_mutually_exclusive_group(required=True)
-    source.add_argument("--source", help="video file")
+    source.add_argument("--source", nargs="+", help="video file(s); several are played back to back")
     source.add_argument("--sevilla", help="Sevilla segment name (stills at 2 frames/s)")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--label", help="camera name in the messages (default: source.label)")
     parser.add_argument("--no-telegram", action="store_true", help="console only, even with the bot set up")
+    parser.add_argument(
+        "--hide",
+        type=float,
+        nargs=4,
+        action="append",
+        default=[],
+        metavar=("X0", "Y0", "X1", "Y1"),
+        help="blur this box (shares of the frame) in the output only, e.g. the camera's clock; repeatable",
+    )
     args = parser.parse_args(argv)
     load_dotenv(find_dotenv(usecwd=True))
     config = load_config(args.config)
@@ -143,7 +181,7 @@ def main(argv: list[str] | None = None) -> None:
     if args.sevilla:
         frames = sevilla_clip(args.sevilla)
     else:
-        frames = iter(LatestFrameReader(args.source, "offline", target_fps=config.analysis.fps))
+        frames = chained(args.source, config.analysis.fps)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     writer, card, incidents, written, log = None, None, 0, 0, []
     try:
@@ -164,6 +202,7 @@ def main(argv: list[str] | None = None) -> None:
                 others=found.others,
                 highlight=incident.participants if incident is not None else set(),  # calm: all faint
             )
+            image = hide(image, args.hide)
             risk, decision = pipeline.last_risk, pipeline.last_decision
             out = compose(
                 image,
@@ -193,7 +232,7 @@ def main(argv: list[str] | None = None) -> None:
         notifier.close()
     args.out.with_suffix(".events.json").write_text(
         json.dumps(
-            {"source": args.source or args.sevilla, "label": label, "events": log},
+            {"source": args.source or args.sevilla, "label": label, "hidden": args.hide, "events": log},
             ensure_ascii=False,
             indent=1,
         ),

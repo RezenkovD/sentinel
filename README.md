@@ -43,9 +43,12 @@ uv run sentinel export
 Демо-відео для захисту (кліп зі станом, ризиком, учасниками й текстом повідомлення Telegram; обличчя розмиті):
 
 ```bash
-uv run sentinel demo --source results/sanity_videos/lifecycle_long_gaps.mp4 --out results/demo/1_fight.mp4 --label "Камера 1"
-uv run sentinel demo --sevilla Cam5-From09-47-49To09-48-30_x264 --out results/demo/2_weapon.mp4 --label "Камера 2 — хол"
+uv run sentinel demo --source <кліп>.avi [<кліп>.avi …] --out results/demo/1_fight.mp4 --label "Зал кафе"   # кілька — поспіль
+uv run sentinel demo --sevilla Cam5-From09-47-49To09-48-30_x264 --out results/demo/2_weapon.mp4 --label "Хол" \
+  --hide 0 0 0.09 0.07 --hide 0.37 0.92 0.63 0.99      # розмити напис камери лише у вихідному відео
 ```
+
+Кліпи, порядок показу, сценарій на 5–7 хв, запасні варіанти й чек-лист живого запуску — [`docs/demo.md`](docs/demo.md).
 
 Docker (лише CPU; ваги, дані, результати й `.env` монтуються, в образ не потрапляють):
 
@@ -94,6 +97,12 @@ uv run sentinel eval b-pilot --prompt b_v1 --per-stratum 15 --repeat-windows 40 
 uv run sentinel eval b-pilot --prompt b_v1 --per-stratum 15 --report-only                     # проміжні метрики з кешу
 uv run sentinel eval fsm-tune               # θ_low і M автомата на склейках val
 uv run sentinel eval cascade-grid           # сіра зона каскаду на val (потрібні відповіді B на вікна val)
+uv run sentinel eval reference-stats --percentiles   # перцентилі полів для промпту b_v2 (підготовлено, не запускається)
+uv run sentinel eval experiment freeze      # тест відкривається один раз: хеші заморожених A, конфігу, кешу, порогів
+uv run sentinel eval experiment rwf|sevilla|xd   # тест: A і базові методи, 95 % ДІ бутстрепом, ROC
+uv run sentinel eval experiment report      # docs/bench/experiment_test_<дата>.md
+scripts/protocol.sh --build                 # протокол випробувань у Docker → docs/reports/protocol_<дата>.md
+uv run --with matplotlib sentinel eval thesis-pack   # results/thesis_pack_<дата>.zip: числа, таблиці, рисунки, скриншоти
 ```
 
 Налаштування (частота аналізу, розмір входу, пороги, ваги A, автомат інцидентів) — `configs/default.yaml`,
