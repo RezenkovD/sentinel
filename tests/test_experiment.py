@@ -125,3 +125,14 @@ def test_check_frozen_refuses_when_anything_changed(tmp_path, monkeypatch):
         experiment.check_frozen(None, None, None, freeze)
     with pytest.raises(SystemExit, match="missing"):
         experiment.check_frozen(None, None, None, tmp_path / "none.json")
+
+
+def test_config_digest_ignores_b_and_the_cascade_but_not_a_or_the_automaton():
+    from sentinel.config import DEFAULT_CONFIG, load_config
+    from sentinel.eval.experiment import config_digest
+
+    config = load_config(DEFAULT_CONFIG)
+    grey = config.model_copy(update={"aggregation": config.aggregation.model_copy(update={"g_low": 0.3})})
+    assert config_digest(grey) == config_digest(config)
+    theta = config.model_copy(update={"incidents": config.incidents.model_copy(update={"theta_low": 0.6})})
+    assert config_digest(theta) != config_digest(config)

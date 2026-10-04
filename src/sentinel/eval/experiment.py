@@ -162,6 +162,19 @@ def motion_tau(config: Config, episodes: Path) -> float:
     return motion_baseline(val)["threshold"]
 
 
+# config sections the test results depend on; `llm`, `aggregation` (B and the cascade — val only), `notify`,
+# `source` and `bench` may still change after the test is opened
+FROZEN_SECTIONS = (
+    "analysis", "models", "weapons", "features", "motion", "context",
+    "aggregator_a", "incidents", "baselines",
+)  # fmt: skip
+
+
+def config_digest(config: Config) -> str:
+    data = config.model_dump(mode="json", include=set(FROZEN_SECTIONS))
+    return hashlib.sha256(json.dumps(data, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
 def frozen_state(config_path: Path, config: Config, episodes: Path) -> dict:
     """Everything the test results depend on, hashed."""
     model = Path(config.aggregator_a.model)
@@ -174,7 +187,7 @@ def frozen_state(config_path: Path, config: Config, episodes: Path) -> dict:
             {f"{e.meta['perception_version']}:{e.meta['perception_hash']}" for e in eps}
         )
     return {
-        "config": {"path": str(config_path), "sha256": sha256(config_path)},
+        "config": {"sections": list(FROZEN_SECTIONS), "sha256": config_digest(config)},
         "zones_sha256": sha256(Path(config.context.zones)),
         "aggregator_a": {
             "path": str(model),
