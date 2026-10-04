@@ -281,7 +281,21 @@ def run_rwf(config: Config, record: dict, episodes: Path) -> dict:
         rows[name] = episode_metrics(np.array(scores[name]["episode"]), labels, thresholds[name]) | {
             "window": window_auc(scores[name]["windows"])
         }
-    return {"dataset": "RWF-2000 test", "episode_rule_a": a["episode_rule"], "configs": rows}
+    episode = {name: np.array(scores[name]["episode"]) for name in CONFIGS}
+    delta = {}
+    for base in ("baseline_motion", "baseline_weapon"):  # paired: the same resampled clips for both
+
+        def diff(idx: np.ndarray, base: str = base) -> float | None:
+            a_auc, b_auc = _auc(labels[idx], episode["A"][idx]), _auc(labels[idx], episode[base][idx])
+            return None if a_auc is None or b_auc is None else a_auc - b_auc
+
+        delta[base] = {"delta_auc": diff(np.arange(len(labels))), "ci": bootstrap(diff, len(labels))}
+    return {
+        "dataset": "RWF-2000 test",
+        "episode_rule_a": a["episode_rule"],
+        "configs": rows,
+        "a_minus_baseline_auc": delta,
+    }
 
 
 # --- Sevilla Cam7: the weapon scenario ------------------------------------------------------------------
@@ -601,6 +615,8 @@ def rwf_table(result: dict) -> tuple[list[str], list[list[str]]]:
                 _ci(r["window"]["auc"], r["window"]["auc_ci"]),
             ]
         )
+    for base, d in result.get("a_minus_baseline_auc", {}).items():
+        rows.append([f"A − {NAMES_UK[base].lower()}", _ci(d["delta_auc"], d["ci"]), *["—"] * (len(head) - 2)])
     return head, rows
 
 
@@ -728,14 +744,18 @@ def write_report(record: dict, out: Path, path: Path) -> None:
     for name, (title, head, rows) in tables(out).items():
         lines += [f"## {title}", "", *markdown_table(head, rows), ""]
         lines += NOTES.get(name, [])
+    if path.exists() and MANUAL in (old := path.read_text(encoding="utf-8")):  # keep the written conclusions
+        lines += [old[old.index(MANUAL) :].rstrip("\n")]
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+MANUAL = "## Висновки (додано вручну)"
 NOTES = {
     "rwf": [
         "Оцінка епізоду: рух — найбільша енергія руху вікна; зброя — найвища оцінка детектора у вікні; "
-        "A — середній ризик вікон. AUC вікон — мітка кліпу для кожного його вікна.",
+        "A — середній ризик вікон. AUC вікон — мітка кліпу для кожного його вікна. Рядки «A − …» — різниця "
+        "AUC епізодів, інтервал — парний бутстреп (ті самі кліпи для обох методів).",
         "",
     ],
     "sevilla": [
