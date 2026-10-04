@@ -242,3 +242,28 @@ def test_openrouter_gets_its_reasoning_format_and_a_pinned_provider(tmp_path: Pa
     body = session.calls[0]
     assert body["reasoning"] == {"effort": "low"} and "reasoning_effort" not in body
     assert body["provider"]["allow_fallbacks"] is False and len(body["provider"]["order"]) == 1
+
+
+def test_b_v2_puts_each_numeric_fields_percentile_next_to_it():
+    """Decision 05.10: b_v2 — the same scene with `<field>_pct` among calm train windows; nulls stay null."""
+    from sentinel.aggregators.llm import percentile, with_percentiles
+
+    grid = [float(v) for v in range(101)]
+    assert percentile(-1.0, grid) == 0 and percentile(0.0, grid) == 0
+    assert percentile(93.4, grid) == 93 and percentile(1000.0, grid) == 100
+    data = json.loads(
+        with_percentiles(_scene(speed=40.0), {"persons.speed": grid, "summary.crowd_motion": grid})
+    )
+    assert data["persons"][0]["speed"] == 40.0 and data["persons"][0]["speed_pct"] == 40
+    assert data["summary"]["crowd_motion_pct"] == 40
+    assert data["persons"][0]["limb_accel"] is None and "limb_accel_pct" not in data["persons"][0]
+    nulls = json.loads(with_percentiles(_scene(), {"persons.limb_accel": grid}))
+    assert nulls["persons"][0]["limb_accel_pct"] is None
+
+
+def test_b_v1_sends_the_scene_unchanged_and_b_v2_the_augmented_one():
+    b1 = BAggregator(CONFIG, None, None, "groq", stats=STATS, prompt_version="b_v1")
+    assert b1.user_message(_scene()) == canonical_json(_scene())
+    b2 = BAggregator(CONFIG, None, None, "groq", stats=STATS, prompt_version="b_v2")
+    assert "speed_pct" in b2.user_message(_scene()) and "percentile" in b2.prompt
+    assert b1.key(_scene()) != b2.key(_scene())  # separate cache entries per prompt version

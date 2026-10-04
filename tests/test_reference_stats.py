@@ -47,3 +47,13 @@ def test_quantiles_come_from_calm_train_windows_only_and_skip_nulls():
 def test_a_val_or_test_episode_is_refused():
     with pytest.raises(ValueError, match="train"):
         reference_stats([_episode("val", 0, [_scene([0.1], 1.0)])])
+
+
+def test_percentile_grids_are_101_quantiles_of_calm_train_values():
+    from sentinel.eval.reference_stats import reference_percentiles
+
+    calm = _episode("train", 0, [_scene([float(v), None], float(v)) for v in range(101)])
+    fight = _episode("train", 1, [_scene([500.0, 500.0], 500.0)])
+    grids = reference_percentiles([calm, fight])["percentiles"]
+    assert grids["persons.speed"] == [float(v) for v in range(101)]
+    assert "summary.crowd_motion" not in grids

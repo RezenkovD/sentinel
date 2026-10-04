@@ -3,6 +3,9 @@
 Input — exactly the `SceneDescription` A gets, as canonical JSON (sorted keys, the schema's rounding); no
 aux, no images. The prompt is versioned (`prompts/<version>.md`) and carries only the usual values of the
 fields on calm windows of our train (`prompts/reference_stats.json`): B is zero-shot with respect to labels.
+`b_v2` (prepared, not run — decision 05.10) also puts next to every numeric field its percentile among those
+calm windows (`"pose_motion": 0.45, "pose_motion_pct": 93`, from `prompts/reference_percentiles.json`); the
+scene itself and the cache key stay the same.
 
 Output — `{risk, level, reason_uk}` validated by `RiskResult`, plus reason_uk ≤ 200 characters; an invalid
 answer is retried once with the error, then counted as `invalid`. Every answer (ok or invalid) goes into the
@@ -55,6 +58,35 @@ def canonical_json(scene: SceneDescription) -> str:
 
 def load_reference_stats() -> dict:
     return json.loads((PROMPTS / "reference_stats.json").read_text(encoding="utf-8"))
+
+
+WITH_PERCENTILES = {"b_v2"}  # prompt versions whose user message carries the percentiles of the fields
+
+
+def load_reference_percentiles() -> dict[str, list[float]]:
+    return json.loads((PROMPTS / "reference_percentiles.json").read_text(encoding="utf-8"))["percentiles"]
+
+
+def percentile(value: float, grid: list[float]) -> int:
+    """Percentile of `value` among calm windows: how many of the 101 quantiles q0…q100 are at or below it,
+    minus one (0 at or below the calmest value, 100 at or above the largest)."""
+    import bisect
+
+    return max(0, min(100, bisect.bisect_right(grid, value) - 1))
+
+
+def with_percentiles(scene: SceneDescription, percentiles: dict[str, list[float]]) -> str:
+    """Canonical JSON of the scene with `<field>_pct` next to every numeric field that has a reference
+    (null stays null)."""
+    data = scene.model_dump(mode="json")
+    groups = {"summary": [data["summary"]], "persons": data["persons"], "interactions": data["interactions"]}
+    for group, items in groups.items():
+        for item in items:
+            for name in list(item):
+                grid = percentiles.get(f"{group}.{name}")
+                if grid is not None and not isinstance(item[name], bool):
+                    item[f"{name}_pct"] = None if item[name] is None else percentile(float(item[name]), grid)
+    return json.dumps(data, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
 
 
 def render_prompt(version: str, stats: dict) -> str:
@@ -223,6 +255,7 @@ class BAggregator:
         self.prompt_version, self.wait_on_limits, self.max_errors = prompt_version, wait_on_limits, max_errors
         self.model = config.llm.providers[provider].model
         self.prompt = render_prompt(prompt_version, stats if stats is not None else load_reference_stats())
+        self.percentiles = load_reference_percentiles() if prompt_version in WITH_PERCENTILES else None
         self.structured = True  # json_schema until the provider refuses it
 
     def key(self, scene: SceneDescription) -> str:
@@ -278,6 +311,11 @@ class BAggregator:
                     raise
                 self.client.sleep(5.0 * errors)  # a transient provider error (5xx, timeout): try again
 
+    def user_message(self, scene: SceneDescription) -> str:
+        if self.percentiles is None:
+            return canonical_json(scene)
+        return with_percentiles(scene, self.percentiles)
+
     def answer(self, scene: SceneDescription, use_cache: bool = True) -> BAnswer:
         key = self.key(scene)
         if use_cache and (record := self.cache.get(key)) is not None:
@@ -288,7 +326,7 @@ class BAggregator:
             )  # fmt: skip
         messages = [
             {"role": "system", "content": self.prompt},
-            {"role": "user", "content": canonical_json(scene)},
+            {"role": "user", "content": self.user_message(scene)},
         ]
         usage = {"input": 0, "output": 0, "reasoning": 0}
         latency, raw, error, result, errors, attempts = 0.0, None, None, None, [], 0

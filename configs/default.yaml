@@ -29,7 +29,8 @@ models:
     keypoint_conf: 0.5    # a keypoint counts as confident from this score
     box_margin: 0.1       # expansion of the track box, share of its width/height per side
 
-weapons:                  # weapon detector (session 02: docs/bench/weapons_2026-09-29.md; final choice pending)
+weapons:                  # weapon detector (session 02: docs/bench/weapons_2026-09-29.md); mode by the rule of
+                          # decision 05.10: crops 320:2 RTF@10 1.07-1.81 on 6-20 people > 0.8 -> whole frame 480:2
   weights: weights/candidates/gh-halok600-weaponshield-yolov8s/best.pt
   mode: frame               # frame | crops (padded squares around tracked people — small weapons get larger)
   imgsz: 480
@@ -63,8 +64,9 @@ context:
   zones: configs/zones.yaml
 
 aggregator_a:               # A: a trained model if `model` is set, else the hand-set weights v0.1 below
-  model: weights/aggregator_a/a_v1_1_all.json  # A v1.1, final for the experiment (frozen 01.10, sha256 5943d328…): LR on
-                            # all RWF train windows but empty ones                            # that do not move; no facing_close / weapon features (decisions 30.09, report 03)
+  model: weights/aggregator_a/a_v1_1_all.json  # A v1.1, final for the experiment (frozen 01.10, sha256 5943d328…):
+                            # LR on all RWF train windows but empty ones that do not move; no facing_close /
+                            # weapon features (decisions 30.09, report 03)
   # risk = sigmoid(bias + Σ weights[f] · clip((x_f − mean_f) / scale[f], ±clip)); mean = 0 for hand-set weights.
   # A null feature takes its `neutral` value; explanations rank contributions against the neutral scene.
   bias: -1.5                # v0.1 (29.09): tuned on the sanity samples, see docs/DECISIONS.md

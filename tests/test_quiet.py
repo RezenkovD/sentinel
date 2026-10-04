@@ -136,6 +136,16 @@ def test_no_measurement_on_battery_or_without_the_performance_profile():
         assert rows == [] and measured == []
 
 
+def _settled_state(pid: int, done, timeout_s: float = 2.0) -> str:
+    """The process state letter once `done(state)` holds, or the last one read after `timeout_s`."""
+    deadline = time.monotonic() + timeout_s
+    while True:
+        state = Path(f"/proc/{pid}/stat").read_text().split(")")[1].split()[0]
+        if done(state) or time.monotonic() > deadline:
+            return state
+        time.sleep(0.01)
+
+
 def test_only_live_extraction_processes_are_paused(tmp_path: Path):
     import subprocess
     import sys
@@ -158,11 +168,9 @@ def test_only_live_extraction_processes_are_paused(tmp_path: Path):
         assert extraction_pids(tmp_path) == [extraction.pid]
         assert sorted(p.name for p in tmp_path.iterdir()) == [f"{extraction.pid}.pid"]  # stale files cleaned
         pause_extraction(tmp_path)
-        state = Path(f"/proc/{extraction.pid}/stat").read_text().split(")")[1].split()[0]
-        assert state == "T"
+        assert _settled_state(extraction.pid, lambda s: s == "T") == "T"  # signals arrive asynchronously
         resume_extraction(tmp_path)
-        state = Path(f"/proc/{extraction.pid}/stat").read_text().split(")")[1].split()[0]
-        assert state != "T"
+        assert _settled_state(extraction.pid, lambda s: s != "T") != "T"
         assert Path(f"/proc/{other.pid}/stat").read_text().split(")")[1].split()[0] != "T"
     finally:
         extraction.kill()
