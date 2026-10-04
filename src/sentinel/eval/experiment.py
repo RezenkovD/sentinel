@@ -419,53 +419,76 @@ def automaton_alarms(scenes, risks, cfg) -> list[bool]:
     return flags
 
 
+def merge_segments(segs: list[tuple[int, int]], scenes, gap_s: float) -> list[tuple[int, int]]:
+    """Violent runs separated by less than `gap_s` seconds of normal windows are one segment: the automaton
+    keeps an incident open over such a gap (M + 5 s), so for the operator they are one event."""
+    merged: list[tuple[int, int]] = []
+    for first, last in segs:
+        if merged and scenes[first].window.t_start - scenes[merged[-1][1]].window.t_end < gap_s:
+            merged[-1] = (merged[-1][0], last)
+        else:
+            merged.append((first, last))
+    return merged
+
+
 def alarm_timing(episodes: list[CachedEpisode], alarms: list[list[bool]], quiet_s: float) -> dict:
-    """Violent segments: detected share and delay to the first alarm window; alarm onsets in normal video
-    (not within a segment nor M + 5 s after one) per hour of normal windows. Intervals over videos."""
-    det, delays, per_video = [], [], []
+    """Violent segments (runs of violent windows, merged across gaps shorter than M + 5 s): the share with an
+    alarm, the share where the alarm was already on when the segment began (raised during the lead-in), and
+    the delay from the segment's start to its first alarm window for the others. A false alarm is an alarm
+    run that overlaps no violent window and does not start within M + 5 s after a segment; the rate is per
+    hour of normal windows. Intervals resample whole videos."""
+    tail = quiet_s + GRACE_S
+    per_video = []
     for e, flags in zip(episodes, alarms, strict=True):
         labels = [int(a.get("label", 0)) for a in e.aux]
-        segs = segments_of(labels)
-        v_det, v_del = [], []
+        segs = merge_segments(segments_of(labels), e.scenes, tail)
+        detected, already, delays = [], [], []
         for first, last in segs:
             hits = [i for i in range(first, last + 1) if flags[i]]
-            v_det.append(bool(hits))
-            if hits:
-                v_del.append(e.scenes[hits[0]].window.t_end - e.scenes[first].window.t_start)
-        spans = [
-            (e.scenes[f].window.t_start, e.scenes[last].window.t_end + quiet_s + GRACE_S) for f, last in segs
-        ]
-        false = sum(
-            1 for i in _onsets(flags) if not any(s <= e.scenes[i].window.t_end <= end for s, end in spans)
-        )
+            on = first > 0 and flags[first - 1]
+            detected.append(bool(hits))
+            already.append(on)
+            if hits and not on:
+                delays.append(e.scenes[hits[0]].window.t_end - e.scenes[first].window.t_start)
+        false = 0
+        for i in _onsets(flags):
+            j = i
+            while j + 1 < len(flags) and flags[j + 1]:
+                j += 1
+            t = e.scenes[i].window.t_end
+            ends = [e.scenes[last].window.t_end for _, last in segs]
+            false += not any(labels[i : j + 1]) and not any(end < t <= end + tail for end in ends)
         normal_s = sum(
             s.window.t_end - s.window.t_start for s, v in zip(e.scenes, labels, strict=True) if not v
         )
-        det += v_det
-        delays += v_del
-        per_video.append((v_det, v_del, false, normal_s))
+        per_video.append((detected, already, delays, false, normal_s))
 
-    def fa_rate(idx: np.ndarray) -> float | None:
-        hours = sum(per_video[i][3] for i in idx) / 3600
-        return sum(per_video[i][2] for i in idx) / hours if hours else None
+    def pooled(k: int) -> Callable[[np.ndarray], list]:
+        return lambda idx: [x for i in idx for x in per_video[i][k]]
 
-    def det_share(idx: np.ndarray) -> float | None:
-        flags = [d for i in idx for d in per_video[i][0]]
-        return float(np.mean(flags)) if flags else None
+    def share(k: int) -> Callable[[np.ndarray], float | None]:
+        return lambda idx: float(np.mean(v)) if (v := pooled(k)(idx)) else None
 
     def med_delay(idx: np.ndarray) -> float | None:
-        values = [d for i in idx for d in per_video[i][1]]
+        values = pooled(2)(idx)
         return float(np.median(values)) if values else None
+
+    def fa_rate(idx: np.ndarray) -> float | None:
+        hours = sum(per_video[i][4] for i in idx) / 3600
+        return sum(per_video[i][3] for i in idx) / hours if hours else None
 
     every = np.arange(len(per_video))
     return {
-        "segments": len(det),
-        "detected": det_share(every),
-        "detected_ci": bootstrap(det_share, len(per_video)),
+        "videos": len(per_video),
+        "segments": len(pooled(0)(every)),
+        "detected": share(0)(every),
+        "detected_ci": bootstrap(share(0), len(per_video)),
+        "already_on": share(1)(every),
+        "delays_s": pooled(2)(every),
         "median_delay_s": med_delay(every),
         "median_delay_ci": bootstrap(med_delay, len(per_video)),
-        "false_onsets": sum(p[2] for p in per_video),
-        "normal_h": sum(p[3] for p in per_video) / 3600,
+        "false_onsets": sum(p[3] for p in per_video),
+        "normal_h": sum(p[4] for p in per_video) / 3600,
         "false_per_h": fa_rate(every),
         "false_per_h_ci": bootstrap(fa_rate, len(per_video)),
     }
@@ -506,7 +529,7 @@ def run_xd(config: Config, record: dict, episodes: Path, crops_root: Path | None
         alarms["baseline_motion"].append((motion >= tau["baseline_motion"]).tolist())
         alarms["baseline_weapon"].append((weapon >= tau["baseline_weapon"]).tolist())
         alarms["A"].append(automaton_alarms(w_scenes, results, config.incidents))
-    groups = {"all": None, "B1": "B1", "B2": "B2"}
+    groups = {"all": None, "B1": "B1", "B2": "B2", "normal": "A"}  # B1 / B2 with the normal videos
     rows = {}
     for name in CONFIGS:
         rows[name] = {"window": {}, "alarms": {}}
@@ -625,20 +648,30 @@ def xd_tables(result: dict) -> dict[str, tuple[list[str], list[list[str]]]]:
     alarm_head = [
         "Конфігурація",
         "Група",
-        "Виявлено сегментів",
+        "Сегментів з тривогою",
+        "Тривога вже була на початку",
         "Медіана затримки, с",
         "Хибних тривог на год норми",
     ]
     alarm_rows = []
     for n in CONFIGS:
-        for g, label in (("all", "усі"), ("B1", "B1 + норма"), ("B2", "B2 + норма")):
+        for g, label in (
+            ("all", "усі 156"),
+            ("B1", "B1 + норма"),
+            ("B2", "B2 + норма"),
+            ("normal", "лише норма (31)"),
+        ):
             r = result["configs"][n]["alarms"][g]
+            segments = r["segments"]
             alarm_rows.append(
                 [
                     NAMES_UK[n],
                     label,
-                    f"{_ci(r['detected'], r['detected_ci'], 2)} з {r['segments']}",
-                    _ci(r["median_delay_s"], r["median_delay_ci"], 1),
+                    f"{_ci(r['detected'], r['detected_ci'], 2)} з {segments}" if segments else "—",
+                    _n(r["already_on"], 2) if segments else "—",
+                    f"{_ci(r['median_delay_s'], r['median_delay_ci'], 1)} (n = {len(r['delays_s'])})"
+                    if segments
+                    else "—",
                     f"{_ci(r['false_per_h'], r['false_per_h_ci'], 1)} "
                     f"({r['false_onsets']} за {_n(r['normal_h'], 2)} год)",
                 ]
@@ -716,7 +749,11 @@ NOTES = {
     "xd_alarms": [
         "A — тривога автомата інцидентів (інцидент відкритий); базові методи — вікно з оцінкою ≥ τ, "
         "без автомата. Сегмент — неперервна послідовність вікон із насильством за покадровою розміткою; "
-        "хибна тривога — початок тривоги поза сегментом і поза M + 5 с після нього.",
+        "сегменти, між якими менше M + 5 с, злито в один. «Тривога вже була» — тривога горіла у вікні перед "
+        "початком сегмента (її підняв вступ до сцени); затримка — від початку сегмента до першого вікна "
+        "тривоги, лише для решти сегментів (n). Хибна тривога — неперервна тривога, що не перетинається з "
+        "жодним вікном насильства й почалася не в межах M + 5 с після сегмента; частота — на годину вікон "
+        "без насильства.",
         "",
     ],
 }

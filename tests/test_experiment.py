@@ -136,3 +136,18 @@ def test_config_digest_ignores_b_and_the_cascade_but_not_a_or_the_automaton():
     assert config_digest(grey) == config_digest(config)
     theta = config.model_copy(update={"incidents": config.incidents.model_copy(update={"theta_low": 0.6})})
     assert config_digest(theta) != config_digest(config)
+
+
+def test_runs_closer_than_m_plus_5_s_are_one_segment_and_a_lead_in_alarm_is_not_a_delay():
+    from sentinel.eval.experiment import merge_segments
+
+    # violence in 3..4 and 8..9 (a 3 s gap) and 30..31; the alarm rises at window 1, before the violence
+    labels = [0] * 3 + [1, 1] + [0] * 3 + [1, 1] + [0] * 20 + [1, 1] + [0] * 3
+    e = _episode(labels)
+    assert merge_segments(segments_of(labels), e.scenes, gap_s=10.0) == [(3, 9), (30, 31)]
+    flags = [False] + [True] * 10 + [False] * 19 + [False, True] + [False] * 3
+    t = alarm_timing([e], [flags], quiet_s=5.0)
+    assert t["segments"] == 2 and t["detected"] == 1.0
+    assert t["already_on"] == 0.5  # the first segment began with the alarm already on
+    assert t["delays_s"] == [pytest.approx(2.0)]  # only the second: start of 30 to end of 31
+    assert t["false_onsets"] == 0  # the lead-in alarm runs into the violence: not false
