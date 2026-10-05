@@ -28,6 +28,7 @@ EVAL_COMMANDS = {
     "experiment": ("experiment", True),
     "protocol": ("protocol", True),
     "thesis-pack": ("thesis_pack", True),
+    "raw-wrist": ("raw_wrist", True),
 }
 
 

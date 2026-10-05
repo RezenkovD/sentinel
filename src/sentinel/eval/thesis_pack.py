@@ -46,6 +46,11 @@ def _mtime(path: Path) -> float:
     return path.stat().st_mtime
 
 
+def _k(n: int) -> str:
+    """Thousands with a space, as in Ukrainian texts: 6400 -> 6 400."""
+    return f"{n:,}".replace(",", " ")
+
+
 def _pct(share: float) -> str:
     return f"{100 * share:.1f}".replace(".", ",") + " %"
 
@@ -523,17 +528,42 @@ def figures(folder: Path) -> list[str]:
     else:
         missing.append("speed_by_configuration")
 
-    auc = _json(RESULTS / "features_auc_train_2026-09-30.json")
-    if auc:
-        rows = sorted((r for r in auc["windows"] if r["auc"] is not None), key=lambda r: r["auc"])
-        fig, ax = plt.subplots(figsize=(6, 5))
-        ax.barh([r["feature"] for r in rows], [r["auc"] for r in rows], color="#3b6ea8")
-        ax.axvline(0.5, color="grey", linestyle=":")
-        ax.set(xlabel="AUC вікон однієї ознаки (RWF train)", xlim=(0.3, 0.85))
-        ax.tick_params(axis="y", labelsize=7)
+    source = RESULTS / "features_auc_a_v1_1_train.json"
+    auc = _json(source)
+    if auc:  # figure 2.2: A v1.1's features in the order of table 2.3, then the dropped ones, muted
+        feats, dropped = auc["features"], auc["dropped"]
+        labels = [r["label_uk"] for r in feats] + ["не входять до A"] + [r["label_uk"] for r in dropped]
+        values = [r["auc"] for r in feats] + [None] + [r["auc"] for r in dropped]
+        colours = ["#3b6ea8"] * len(feats) + ["white"] + ["#b8b8b8"] * len(dropped)
+        fig, ax = plt.subplots(figsize=(7, 6.8))
+        ys = list(range(len(labels)))
+        ax.barh(ys, [0.0 if v is None else v for v in values], color=colours, height=0.7)
+        for y, v in zip(ys, values, strict=True):
+            if v is not None:
+                ax.text(v + 0.004, y, _n(v), va="center", fontsize=7, color="#333333")
+        ax.axvline(0.5, color="black", linestyle=":", linewidth=1)
+        ax.set_yticks(ys, labels, fontsize=8)
+        for tick, v in zip(ax.get_yticklabels(), values, strict=True):
+            if v is None:
+                tick.set_fontstyle("italic")
+                tick.set_color("#777777")
+        for tick in ax.get_yticklabels()[len(feats) + 1 :]:
+            tick.set_color("#777777")
+        ax.invert_yaxis()
+        w = auc["windows"]
+        ax.set(
+            xlabel=f"AUC вікна за однією ознакою\n(наш train RWF-2000: {_k(w['all'])} вікон, "
+            f"{_k(w['fight'])} бійка / {_k(w['calm'])} спокій)",
+            xlim=(0.3, 0.82),
+        )
+        ax.xaxis.label.set_size(8)
+        ax.tick_params(axis="y", length=0)
         save(fig, "feature_aucs")
+        shutil.copy(source, folder / "feature_aucs.json")
     else:
-        missing.append("feature_aucs")
+        missing.append(
+            "feature_aucs (немає results/features_auc_a_v1_1_train.json: sentinel eval feature-auc --figure)"
+        )
 
     model = _json(Path("weights/aggregator_a/a_v1_1_all.json"))
     if model:
