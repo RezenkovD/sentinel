@@ -72,7 +72,7 @@ def figure_aucs(episodes, config, raw: dict[str, list[float | None]] | None = No
     """Window AUCs on every window of the episodes (label = clip label): A v1.1's features exactly as A sees
     them (`scene_to_features`, nulls at their neutral values), the dropped ones, and — when given — the raw
     wrist acceleration in the frame (v2) on the same windows, with the same null rule as `max_limb_accel`."""
-    rows, dropped, labels, raw_values, smooth_known = [], [], [], [], []
+    rows, dropped, labels, raw_values, smooth_known, people = [], [], [], [], [], []
     neutral = config.aggregator_a.neutral["max_limb_accel"]
     for e in episodes:
         if raw is not None and len(raw[e.episode_id]) != len(e.scenes):
@@ -82,6 +82,7 @@ def figure_aucs(episodes, config, raw: dict[str, list[float | None]] | None = No
             dropped.append(dropped_features(scene, config))
             labels.append(e.label)
             smooth_known.append(any(p.limb_accel is not None for p in scene.persons))
+            people.append(scene.summary.n_persons > 0)
             if raw is not None:
                 raw_values.append(raw[e.episode_id][i])
     x, y = np.array(rows), np.array(labels)
@@ -105,12 +106,19 @@ def figure_aucs(episodes, config, raw: dict[str, list[float | None]] | None = No
         r = np.array([neutral if v is None else v for v in raw_values], dtype=float)
         known = np.array([v is not None for v in raw_values])
         both = known & np.array(smooth_known)
+        seen = np.array(people)
         smooth = x[:, index["max_limb_accel"]]
         result["raw_wrist_accel"] = {
             "definition": "v2 limb_accel: finite differences of raw wrist points in the frame / median box "
             "height, heights/s², largest over people; null -> neutral of max_limb_accel",
             "auc": _auc(y, r),
             "windows_known": {"fight": int((known & (y == 1)).sum()), "calm": int((known & (y == 0)).sum())},
+            "auc_smoothed_relative": _auc(y, smooth),
+            "on_windows_with_people": {
+                "windows": int(seen.sum()),
+                "auc_raw": _auc(y[seen], r[seen]),
+                "auc_smoothed_relative": _auc(y[seen], smooth[seen]),
+            },
             "on_windows_where_both_known": {
                 "windows": int(both.sum()),
                 "auc_raw": _auc(y[both], r[both]),
