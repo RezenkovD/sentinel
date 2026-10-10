@@ -307,7 +307,7 @@ def aggregator_b(numbers: Numbers) -> None:
             source,
         )
         numbers.add(
-            "Пілот: AUC вікон B / A на тих самих вікнах",
+            "Пілот (стратифікований, не оцінка якості): AUC вікон B / A на тих самих вікнах",
             f"{_n(m['window_auc_b'])} / {_n(m['window_auc_a_same_windows'])}",
             source,
         )
@@ -340,7 +340,8 @@ def aggregator_b(numbers: Numbers) -> None:
     val = sorted(RESULTS.glob("b_val_*.json"), key=_mtime)
     if val:
         data, src = _json(val[-1]), val[-1]
-        for key, title in (("val120", "120 кліпів val, 600 вікон"), ("pilot", "117 вікон пілоту")):
+        pilot = "117 вікон пілоту (стратифікована вибірка — перевірка формату, не оцінка якості)"
+        for key, title in (("val120", "120 кліпів val, 600 вікон"), ("pilot", pilot)):
             r = data[key]
             c = r["all"]
             numbers.add(
