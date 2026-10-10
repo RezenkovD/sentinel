@@ -52,3 +52,19 @@ def test_the_zone_is_the_best_auc_within_the_share_of_calls():
         {"g_low": 0.45, "g_high": 0.55, "b_share": 0.1, "episode_auc": 0.88, "missing": 0},
     ]
     assert choose_zone(rows, max_share=0.25)["g_low"] == 0.4
+
+
+def test_endpoints_give_a_alone_and_b_alone_on_the_same_clips():
+    from sentinel.eval.cascade_grid import endpoints
+    from sentinel.schema import RiskResult
+
+    def risk(v: float) -> RiskResult:
+        return RiskResult(risk=v, level="normal", reason_uk="x")
+
+    clips = [
+        {"label": 1, "a": [risk(0.9), risk(0.8)], "b": {0: (risk(0.2), 1.0), 1: (risk(0.3), 1.0)}},
+        {"label": 0, "a": [risk(0.1), risk(0.2)], "b": {0: (risk(0.7), 1.0)}},
+    ]
+    ends = endpoints(clips, "mean")
+    assert ends["a"]["episode_auc"] == 1.0 and ends["a"]["b_share"] == 0.0
+    assert ends["b"]["episode_auc"] == 0.0 and ends["b"]["b_share"] == 1.0

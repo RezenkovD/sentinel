@@ -29,6 +29,7 @@ EVAL_COMMANDS = {
     "protocol": ("protocol", True),
     "thesis-pack": ("thesis_pack", True),
     "raw-wrist": ("raw_wrist", True),
+    "b-val": ("b_val", True),
 }
 
 

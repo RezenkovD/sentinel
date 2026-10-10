@@ -337,11 +337,61 @@ def aggregator_b(numbers: Numbers) -> None:
         "$6,25 (B на кожному вікні); безкоштовно — ≈ 148 діб; через OpenRouter / DeepInfra ≈ $1,62",
         Path("docs/reports/05-aggregator-B-cascade.md"),
     )
-    grid = sorted(RESULTS.glob("cascade_grid_*.json"))
-    if grid:
+    val = sorted(RESULTS.glob("b_val_*.json"), key=_mtime)
+    if val:
+        data, src = _json(val[-1]), val[-1]
+        for key, title in (("val120", "120 кліпів val, 600 вікон"), ("pilot", "117 вікон пілоту")):
+            r = data[key]
+            c = r["all"]
+            numbers.add(
+                f"B проти A, {title}: AUC вікон B; A; B − A [95 % ДІ, бутстреп за кліпами]",
+                f"{_ci(c['auc_b'], c['auc_b_ci'])}; {_ci(c['auc_a'], c['auc_a_ci'])}; "
+                f"{_ci(c['b_minus_a'], c['b_minus_a_ci'])}",
+                src,
+            )
+            u = r["usage"]
+            numbers.add(
+                f"B, {title}: валідних; затримка p50 / p95; токенів на виклик (вхід / вихід / міркування); "
+                "вартість за прейскурантом Groq",
+                f"{100 * r['valid_share']:.0f} %; "
+                f"{_n(u['latency_p50_s'], 2)} / {_n(u['latency_p95_s'], 2)} с; "
+                f"{u['tokens_mean']['input']:.0f} / {u['tokens_mean']['output']:.0f} / "
+                f"{u['tokens_mean']['reasoning']:.0f}; ${_n(u['cost_usd_list_price'], 2)} (верхня оцінка)",
+                src,
+            )
+        p = data["val120"]["with_people"]
+        e = data["val120"]["episode_auc"]
         numbers.add(
-            "Каскад: обрана сіра зона", json.dumps(_json(grid[-1]).get("best"), ensure_ascii=False), grid[-1]
+            "B проти A, 120 кліпів val: вікна з людьми (B; A; B − A); AUC епізодів B / A",
+            f"{_n(p['auc_b'])}; {_n(p['auc_a'])}; {_ci(p['b_minus_a'], p['b_minus_a_ci'])}; "
+            f"{_n(e['b'])} / {_n(e['a'])}",
+            src,
         )
+    grid = sorted(RESULTS.glob("cascade_grid_*.json"), key=_mtime)
+    if grid:
+        g = _json(grid[-1])
+        if g.get("a_only"):
+            top = max(g["rows"], key=lambda r: (r["episode_auc"], -r["b_share"]))
+            low = min(g["rows"], key=lambda r: r["b_share"])
+            numbers.add(
+                f"Каскад, {g['clips']} кліпів val: AUC епізодів лише A / лише B",
+                f"{_n(g['a_only']['episode_auc'])} / {_n(g['b_only']['episode_auc'])} "
+                f"(AUC вікон {_n(g['a_only']['window_auc'])} / {_n(g['b_only']['window_auc'])})",
+                grid[-1],
+            )
+            numbers.add(
+                "Каскад: найкраща зона; AUC епізодів / вікон; частка вікон до B (усі / спокійні / бійки)",
+                f"{_n(top['g_low'], 2)}–{_n(top['g_high'], 2)}; "
+                f"{_n(top['episode_auc'])} / {_n(top['window_auc'])}; "
+                f"{_pct(top['b_share'])} / {_pct(top['b_share_calm'])} / {_pct(top['b_share_fight'])}",
+                grid[-1],
+            )
+            numbers.add(
+                f"Каскад: найменша частка викликів у сітці (межа правила — {_pct(g['max_share'])})",
+                f"{_pct(low['b_share'])} (зона {_n(low['g_low'], 2)}–{_n(low['g_high'], 2)}) — "
+                + ("жодна зона не вкладається в межу" if g.get("best") is None else "межу виконано"),
+                grid[-1],
+            )
 
 
 def code_size(numbers: Numbers) -> None:
@@ -581,13 +631,37 @@ def figures(folder: Path) -> list[str]:
     else:
         missing.append("a_v1_1_coefficients")
 
-    grid = sorted(RESULTS.glob("cascade_grid_*.json"))
-    if grid:
-        rows = _json(grid[-1]).get("rows", [])
-        fig, ax = plt.subplots(figsize=(6, 4))
-        ax.scatter([r["b_share"] for r in rows], [r["auc"] for r in rows], s=12)
-        ax.set(xlabel="Частка вікон, переданих B", ylabel="AUC вікон каскаду (val)")
+    grid = sorted(RESULTS.glob("cascade_grid_*.json"), key=_mtime)
+    data = _json(grid[-1]) if grid else None
+    if data and data.get("a_only"):
+        rows, best = data["rows"], data.get("best")
+        fig, ax = plt.subplots(figsize=(6.4, 4.2))
+        shares = [100 * r["b_share"] for r in rows]
+        ax.scatter(
+            shares, [r["episode_auc"] for r in rows], s=14, color="#3b6ea8", label="каскад: межі сірої зони"
+        )
+        top_row = max(rows, key=lambda r: (r["episode_auc"], -r["b_share"]))
+        ends = (("лише A", data["a_only"], "#2e7d32"), ("лише B", data["b_only"], "#a8693b"))
+        for name, point, colour in ends:
+            label = f"{name} ({_n(point['episode_auc'])})"
+            x, y = 100 * point["b_share"], point["episode_auc"]
+            ax.scatter([x], [y], s=55, color=colour, marker="s", zorder=5, label=label)
+        zone = f"{_n(top_row['g_low'], 2)}–{_n(top_row['g_high'], 2)}"
+        label = f"найкраща зона {zone} ({_n(top_row['episode_auc'])}, {100 * top_row['b_share']:.0f} %)"
+        x, y = 100 * top_row["b_share"], top_row["episode_auc"]
+        ax.scatter(
+            [x], [y], s=70, facecolors="none", edgecolors="#c62828", linewidths=1.5, zorder=6, label=label
+        )
+        limit = 100 * data["max_share"]
+        ax.axvline(limit, color="grey", linestyle="--", linewidth=1)
+        ax.text(limit + 1, ax.get_ylim()[0] + 0.004, f"межа {limit:.0f} %", fontsize=7, color="grey")
+        xlabel = f"Вікон, переданих B, % ({data['clips']} кліпів val, {_k(data['windows'])} вікон)"
+        ax.set(xlabel=xlabel, ylabel="AUC епізодів", xlim=(-3, 103))
+        ax.legend(fontsize=7, loc="upper right")
         save(fig, "cascade_curve")
+        shutil.copy(grid[-1], folder / "cascade_curve.json")
+        if best is None:
+            missing.append("(примітка) cascade_curve: жодна зона не вкладається в межу частки викликів B")
     else:
         missing.append("cascade_curve (чекає B на val і cascade-grid)")
     return missing
