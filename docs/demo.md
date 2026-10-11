@@ -49,7 +49,7 @@ scripts/demo_check.sh                    # OK / FAIL по рядку, секре
 |---|---|
 | живлення | підключити зарядку |
 | профіль | `powerprofilesctl set performance` |
-| load ≥ 2 | закрити Docker-тести інших проєктів, PyCharm, зайві вкладки браузера |
+| load ≥ 2 | `docker ps` — зупинити контейнери інших проєктів (11.10 працювали `final-*`, `pr209-*`, `coordinatorcattixcom-*`: load 6,3); закрити PyCharm і зайві вкладки браузера |
 | `sentinel-b` працює | `systemctl --user stop sentinel-b.timer sentinel-b.service` (прогін B на val завершено 08.10, він не потрібен) |
 
 Далі:
