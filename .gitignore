@@ -11,6 +11,22 @@ cache/
 .venv/
 *.pt
 *_openvino_model/
+figures/
+
+# Video and frames with people never go into git (dataset terms, docs/SPEC.md)
+*.mp4
+*.avi
+*.mkv
+*.mov
+*.webm
+*.png
+*.jpg
+*.jpeg
+*.zip
+
+# Editors
+.idea/
+.vscode/
 
 # Python
 __pycache__/

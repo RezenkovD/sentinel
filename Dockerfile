@@ -21,7 +21,7 @@ ENV UV_COMPILE_BYTECODE=1 \
 WORKDIR /app
 
 # dependencies first (cached layer), exactly as locked; the uv cache is a build mount, not part of the image
-COPY pyproject.toml uv.lock README.md ./
+COPY pyproject.toml uv.lock README.md LICENSE ./
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-install-project
 
 COPY src ./src
