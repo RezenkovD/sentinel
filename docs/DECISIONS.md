@@ -133,7 +133,7 @@
 ## 30.09.2026 — рішення за звітом сесії 02
 
 Підстава: [`docs/reports/02-perception-to-incident.md`](reports/02-perception-to-incident.md), розділ 11;
-завдання [`docs/prompts/03-features-episodes-A.md`](prompts/03-features-episodes-A.md), крок 0.
+завдання `docs/prompts/03-features-episodes-A.md`, крок 0.
 
 1. **`openvino` — залежність** (правило `CLAUDE.md` виконано: на PyTorch повний конвеєр дав RTF@10 1,01–1,45).
    - *Змінилось:* `openvino` 2026.4.0 у `dependencies`; `models.backend: torch | openvino`, `models.device: cpu | gpu`
@@ -310,7 +310,7 @@
 ## 30.09.2026 — рішення за звітом сесії 03
 
 Підстава: [`docs/reports/03-features-episodes-A.md`](reports/03-features-episodes-A.md), розділ 12;
-завдання [`docs/prompts/04-report03-decisions.md`](prompts/04-report03-decisions.md).
+завдання `docs/prompts/04-report03-decisions.md`.
 
 1. **Люди — YOLO11n detect:** підтверджено.
 2. **З ознак A прибрано `facing_close`, `weapon_visible`, `weapon_held`.** Зброя діє лише через правило-перекриття
@@ -398,7 +398,7 @@
 ## 01.10.2026 — рішення за звітом сесії 04
 
 Підстава: [`docs/reports/04-report03-decisions.md`](reports/04-report03-decisions.md), розділ 12;
-завдання [`docs/prompts/05-aggregator-B-cascade.md`](prompts/05-aggregator-B-cascade.md), крок 1.
+завдання `docs/prompts/05-aggregator-B-cascade.md`, крок 1.
 
 1. **Перекриття зброї з A прибрано.** Тривога «зброєю» — спільне правило автомата: `holds` того самого треку у
    двох вікнах поспіль, однаково для A, B і каскаду. B бачить `holds` в описі сцени й може враховувати його в
@@ -454,7 +454,7 @@
 ## 05.10.2026 — рішення за звітом сесії 05
 
 Підстава: [`docs/reports/05-aggregator-B-cascade.md`](reports/05-aggregator-B-cascade.md);
-завдання [`docs/prompts/06-test-experiment-demo.md`](prompts/06-test-experiment-demo.md), крок 0.
+завдання `docs/prompts/06-test-experiment-demo.md`, крок 0.
 
 1. **Промпт `b_v1` заморожено як є** (`src/sentinel/aggregators/prompts/b_v1.md`).
    - *Факт пілоту* (`results/b_pilot_b_v1.json`, 117 стратифікованих вікон val, 03.10): AUC вікон B 0,506 проти

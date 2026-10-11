@@ -1,4 +1,4 @@
-# Runtime configuration. Thresholds, rates and input sizes live here, not in code (CLAUDE.md).
+# Runtime configuration. Thresholds, rates and input sizes live here, not in code.
 
 source:
   mode: live              # live (camera / RTSP) | paced (file at real speed) | offline (file, no pauses)

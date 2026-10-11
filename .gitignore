@@ -1,4 +1,4 @@
-# Data and artifacts live outside git (see CLAUDE.md)
+# Data and artifacts live outside git (sources and terms: data/SOURCES.md)
 data/raw/
 data/episodes/
 data/episodes_crops*/

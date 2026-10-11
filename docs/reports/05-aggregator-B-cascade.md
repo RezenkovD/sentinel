@@ -1,7 +1,7 @@
 # Сесія 05 — агрегатор B, каскад, команди бота
 
 **Етап:** завершення звіту 04, рішення за звітом 04, агрегатор B, пілот, каскад, режими `sentinel run`, Telegram
-**Завдання:** [`docs/prompts/05-aggregator-B-cascade.md`](../prompts/05-aggregator-B-cascade.md)
+**Завдання:** `docs/prompts/05-aggregator-B-cascade.md`
 **Дата роботи:** 03.10.2026 · **Виконавець:** Claude Code (Opus 5.5) · **Коміти:** `c72f030` … `12ef144` (13)
 
 ## Коротко

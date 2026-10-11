@@ -1,7 +1,7 @@
 # Звіт 08 — рішення 11.10, відкритий код, захист ПП наживо
 
 Сесія 11.10.2026, частина А (без Дмитра), за завданням
-[`docs/prompts/08-open-source-live-defense.md`](../prompts/08-open-source-live-defense.md).
+`docs/prompts/08-open-source-live-defense.md`.
 
 **Стан частин:**
 - **А** — виконано;

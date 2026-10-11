@@ -1,7 +1,7 @@
 # Сесія 02 — звіт про роботу
 
 **Етап:** рішення за звітом 01, детектор зброї, ознаки й опис сцени, агрегатор A v0, інциденти, наскрізний `sentinel run`
-**Завдання:** [`docs/prompts/02-perception-to-incident.md`](../prompts/02-perception-to-incident.md)
+**Завдання:** `docs/prompts/02-perception-to-incident.md`
 **Дата роботи:** 29.09.2026 · **Виконавець:** Claude Code (Opus 5.5) · **Коміти:** `8c55bb5` … `0b056d5` (20)
 
 ## Коротко

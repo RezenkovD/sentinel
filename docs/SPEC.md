@@ -237,7 +237,6 @@ stateDiagram-v2
 ```text
 sentinel/
 ├── README.md
-├── CLAUDE.md                  # правила для Claude Code в терміналі
 ├── pyproject.toml
 ├── .env.example               # TELEGRAM_TOKEN, TELEGRAM_CHAT_IDS, GROQ_API_KEY, CEREBRAS_API_KEY
 ├── configs/

@@ -1,5 +1,5 @@
 # ByteTrack settings, copied from Ultralytics 8.4.164 (ultralytics/cfg/trackers/bytetrack.yaml) so that
-# tracker thresholds are versioned with the project (CLAUDE.md) instead of changing with the library.
+# tracker thresholds are versioned with the project instead of changing with the library.
 # Values are unchanged. Note: track_buffer counts ANALYSED frames, so 30 means 3–3.75 s at 8–10 fps
 # (it was tuned for 1 s at 30 fps) — a candidate for tuning on the validation split.
 
