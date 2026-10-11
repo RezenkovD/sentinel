@@ -5,8 +5,10 @@
 For every (g_low, g_high) of the grid each val clip runs through `cascade.simulate` (B's answer counts at
 window t + ceil(latency)); reported: the share of windows that asked B, the episode AUC and F1 of the
 resulting window risks (A's episode rule), their window AUC, and windows that asked B without an answer in the
-cache. The zone: the best episode AUC with at most 25 % of the windows sent to B. A missing answer is never
-replaced by A: with any missing the result is refused unless --allow-missing (then it is labelled partial).
+cache. The zone: the best episode AUC with at most --max-share of the windows sent to B. No cap by default:
+the 25 % cap of session 05 cannot be met (transitions alone send 27 % of the windows to B), so the share is
+read off the curve on val (decision 11.10). A missing answer is never replaced by A: with any missing the
+result is refused unless --allow-missing (then it is labelled partial).
 The clips are the ones B answered in full (`sentinel eval b-run --clips 120`, the same seed); A alone and B
 alone on them are given as the two ends of the cascade curve.
 """
@@ -83,7 +85,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--episodes", type=Path, default=OUT_DEFAULT)
     parser.add_argument("--allow-missing", action="store_true")
-    parser.add_argument("--max-share", type=float, default=0.25)
+    parser.add_argument("--max-share", type=float, default=1.0)
     parser.add_argument("--clips", type=int, default=120, help="the val clips of b-run (0 = every val clip)")
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--out", type=Path, default=Path(f"results/cascade_grid_{date.today().isoformat()}"))

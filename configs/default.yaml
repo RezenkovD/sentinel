@@ -171,8 +171,8 @@ llm:                        # aggregator B (decision 01.10): gpt-oss-120b over O
 
 aggregation:                # SPEC §3: A | B | cascade; switchable while running with /mode (Telegram)
   mode: A
-  g_low: 0.4                # cascade grey zone of A's risk: PROVISIONAL until `sentinel eval cascade-grid`
-  g_high: 0.6               # can run on B answers for our val (not enough free Groq tokens yet, 03.10)
+  g_low: 0.5                # cascade grey zone of A's risk, chosen on val (decision 11.10): the best episode AUC
+  g_high: 0.55              # of `sentinel eval cascade-grid` on the 120 B clips — 0.789, 30 % of windows to B
 
 incidents:                  # incident state machine (SPEC §7)
   theta_high: 0.71          # risk that opens / keeps an alarm — A v1: 95 % of calm val windows are below

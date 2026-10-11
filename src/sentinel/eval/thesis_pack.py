@@ -295,7 +295,16 @@ def automaton(numbers: Numbers, config: Config) -> None:
         )
 
 
-def aggregator_b(numbers: Numbers) -> None:
+def _zone(rows: list[dict], config: Config) -> dict:
+    """The grid row of the configured grey zone (decision 11.10), else the row with the best episode AUC."""
+    agg = config.aggregation
+    for r in rows:
+        if abs(r["g_low"] - agg.g_low) < 1e-9 and abs(r["g_high"] - agg.g_high) < 1e-9:
+            return r
+    return max(rows, key=lambda r: (r["episode_auc"], -r["b_share"]))
+
+
+def aggregator_b(numbers: Numbers, config: Config) -> None:
     numbers.section("Агрегатор B (LLM) — пілот і стан на val")
     pilot = _json(RESULTS / "b_pilot_b_v1.json")
     if pilot:
@@ -372,7 +381,7 @@ def aggregator_b(numbers: Numbers) -> None:
     if grid:
         g = _json(grid[-1])
         if g.get("a_only"):
-            top = max(g["rows"], key=lambda r: (r["episode_auc"], -r["b_share"]))
+            top = _zone(g["rows"], config)
             low = min(g["rows"], key=lambda r: r["b_share"])
             numbers.add(
                 f"Каскад, {g['clips']} кліпів val: AUC епізодів лише A / лише B",
@@ -381,16 +390,17 @@ def aggregator_b(numbers: Numbers) -> None:
                 grid[-1],
             )
             numbers.add(
-                "Каскад: найкраща зона; AUC епізодів / вікон; частка вікон до B (усі / спокійні / бійки)",
+                "Каскад: зона в конфігу (рішення 11.10); AUC епізодів / вікон; частка вікон до B "
+                "(усі / спокійні / бійки)",
                 f"{_n(top['g_low'], 2)}–{_n(top['g_high'], 2)}; "
                 f"{_n(top['episode_auc'])} / {_n(top['window_auc'])}; "
                 f"{_pct(top['b_share'])} / {_pct(top['b_share_calm'])} / {_pct(top['b_share_fight'])}",
                 grid[-1],
             )
             numbers.add(
-                f"Каскад: найменша частка викликів у сітці (межа правила — {_pct(g['max_share'])})",
-                f"{_pct(low['b_share'])} (зона {_n(low['g_low'], 2)}–{_n(low['g_high'], 2)}) — "
-                + ("жодна зона не вкладається в межу" if g.get("best") is None else "межу виконано"),
+                "Каскад: найменша частка викликів у сітці — нижче ця логіка каскаду не опускається "
+                "(переходи автомата, УВАГА, ЗАТИХАННЯ)",
+                f"{_pct(low['b_share'])} (зона {_n(low['g_low'], 2)}–{_n(low['g_high'], 2)})",
                 grid[-1],
             )
 
@@ -460,7 +470,7 @@ def tables(folder: Path, speed_rows: list[dict], dataset_rows: list[list[str]]) 
 # --- figures --------------------------------------------------------------------------------------------
 
 
-def figures(folder: Path) -> list[str]:
+def figures(folder: Path, config: Config) -> list[str]:
     """PNG, 300 dpi, white background, Ukrainian labels (DejaVu Sans); returns the ones not made."""
     try:
         import matplotlib
@@ -635,34 +645,29 @@ def figures(folder: Path) -> list[str]:
     grid = sorted(RESULTS.glob("cascade_grid_*.json"), key=_mtime)
     data = _json(grid[-1]) if grid else None
     if data and data.get("a_only"):
-        rows, best = data["rows"], data.get("best")
+        rows = data["rows"]
         fig, ax = plt.subplots(figsize=(6.4, 4.2))
         shares = [100 * r["b_share"] for r in rows]
         ax.scatter(
             shares, [r["episode_auc"] for r in rows], s=14, color="#3b6ea8", label="каскад: межі сірої зони"
         )
-        top_row = max(rows, key=lambda r: (r["episode_auc"], -r["b_share"]))
+        top_row = _zone(rows, config)
         ends = (("лише A", data["a_only"], "#2e7d32"), ("лише B", data["b_only"], "#a8693b"))
         for name, point, colour in ends:
             label = f"{name} ({_n(point['episode_auc'])})"
             x, y = 100 * point["b_share"], point["episode_auc"]
             ax.scatter([x], [y], s=55, color=colour, marker="s", zorder=5, label=label)
         zone = f"{_n(top_row['g_low'], 2)}–{_n(top_row['g_high'], 2)}"
-        label = f"найкраща зона {zone} ({_n(top_row['episode_auc'])}, {100 * top_row['b_share']:.0f} %)"
+        label = f"обрана зона {zone} ({_n(top_row['episode_auc'])}, {100 * top_row['b_share']:.0f} %)"
         x, y = 100 * top_row["b_share"], top_row["episode_auc"]
         ax.scatter(
             [x], [y], s=70, facecolors="none", edgecolors="#c62828", linewidths=1.5, zorder=6, label=label
         )
-        limit = 100 * data["max_share"]
-        ax.axvline(limit, color="grey", linestyle="--", linewidth=1)
-        ax.text(limit + 1, ax.get_ylim()[0] + 0.004, f"межа {limit:.0f} %", fontsize=7, color="grey")
         xlabel = f"Вікон, переданих B, % ({data['clips']} кліпів val, {_k(data['windows'])} вікон)"
         ax.set(xlabel=xlabel, ylabel="AUC епізодів", xlim=(-3, 103))
         ax.legend(fontsize=7, loc="upper right")
         save(fig, "cascade_curve")
         shutil.copy(grid[-1], folder / "cascade_curve.json")
-        if best is None:
-            missing.append("(примітка) cascade_curve: жодна зона не вкладається в межу частки викликів B")
     else:
         missing.append("cascade_curve (чекає B на val і cascade-grid)")
     return missing
@@ -785,10 +790,10 @@ def main(argv: list[str] | None = None) -> None:
         dataset_rows = datasets(numbers)
         quality(numbers)
         automaton(numbers, config)
-        aggregator_b(numbers)
+        aggregator_b(numbers, config)
         code_size(numbers)
         tables(root / "tables", speed_rows, dataset_rows)
-        missing = figures(root / "figures")
+        missing = figures(root / "figures", config)
         shots = screens(root / "screens")
         listings(root / "listings")
         (root / "env.md").write_text(env_md(env), encoding="utf-8")
