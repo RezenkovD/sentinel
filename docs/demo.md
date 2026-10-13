@@ -117,6 +117,54 @@ train RWF-2000, послідовність норма → бійка → бій�
 | Термінал 2 мовчить | Він стежить за новим журналом. Якщо запущений після `sentinel run`, то `scripts/live_view.sh --last` |
 | Конвеєр не стартує (ваги, OpenVINO) | Крок 2 (відео) і крок 4 (тести); розібратися після захисту |
 
+**Інші запуски з ботом.** Перевірено 13.10 від мережі на `performance`, без бота (`TELEGRAM_TOKEN=`). Файли
+лежать у `results/demo/extra/`, поза git. Усі кліпи — лише з нашого train RWF-2000 і з dev Севільї (Cam5), не з тесту.
+
+```bash
+# друга бійка, інша сцена (вулиця, 1280×720): тривога 7,0 с, закриття 19,9 с; 20 с відео, ≈ 13 с аналізу
+uv run sentinel run --source results/demo/extra/fight_4RqDG4I4iAk.mkv
+# спокій: людний торговий центр, 15 с — 0 інцидентів, у Telegram нічого не приходить, і так має бути
+uv run sentinel run --source results/demo/extra/calm_oUqxGhTe.mkv
+# зброя в руці (Севілья, кадри 2 кадр/с): тривога 3,0 с за правилом «2 вікна поспіль», закриття 11,0 с; ≈ 22 с
+uv run sentinel demo --sevilla Cam5-From09-47-49To09-48-30_x264 --label Хол --out results/demo/extra/weapon_run.mp4
+# каскад на тому самому файлі, що й крок 1 (11.10: тривога й закриття ті самі, 12,0 / 19,9 с; ≈ 15 запитів до B)
+uv run sentinel --config results/demo/extra/cascade.yaml run --source results/demo/1_fight_src.mkv
+```
+
+- **Зброю — лише через `sentinel demo --sevilla`.** Він бере налаштування сприйняття для Севільї
+  (`dataset_config(…, "us_gun")`, сприйняття `b28cda67b20ff220`). Звідси й попередження «A … was trained on
+  perception ad09b92…»: A навчено на RWF / XD. Той самий кліп через `sentinel run` має налаштування камери, і тривоги
+  там немає: «зброя в руці» на 3-й і 5-й с, але не у двох вікнах поспіль. Напис камери Севільї (назва, годинник)
+  у фото в Telegram не розмито. Розмито лише обличчя, а `--hide` діє тільки на вихідне відео.
+- **`cascade.yaml`** — локальна копія `configs/default.yaml`, у якій змінено лише `aggregation.mode: cascade`.
+  Хеш сприйняття той самий. Інша можливість — надіслати `/mode cascade` у бот, але прогін без `--paced` триває ≈ 13 с,
+  і на це не вистачає часу.
+- **Не показувати:**
+  - `fight_4RqDG4I4iAk` у каскаді — 13.10 тривоги не було: 15 запитів до B, 4 відповіді, 8 «ліміт». Оцінки B для
+    вікон 3, 4, 8 і 9 (0,22–0,42) були нижчі за A і прийшли із запізненням ≈ 3 с, тож 3 високих вікон із 5 не набралося;
+  - сцени `F7W6PQ3V3y8` і `24E0xYYUz44` (норма → бійка → бійка → норма) — в режимі A тривоги немає.
+
+  Це чесні межі системи: на запитання про це можна відповісти, але показувати як демо не варто.
+
+**Як склеєно файли.** `1_fight_src.mkv` і `extra/fight_*.mkv`, `extra/calm_*.mkv` — оригінальні кліпи RWF-2000
+по 5 с, з'єднані demuxer-ом `concat` у ffmpeg і записані без втрат: FFV1, `bgra`, як у декодері MJPEG. Склейку не
+перекодовано з втратами, тому конвеєр бачить ті самі пікселі, що й в оригіналах. 13.10 `1_fight_src.mkv` перебудовано
+цією командою: усі 600 кадрів збіглися піксель у піксель (framemd5).
+
+```bash
+R=$PWD/data/raw/rwf2000/train
+printf "file '%s'\n" $R/NonFight/JwTPruSFTjk_1.avi $R/Fight/JwTPruSFTjk_0.avi \
+  $R/Fight/JwTPruSFTjk_1.avi $R/NonFight/JwTPruSFTjk_0.avi > /tmp/list.txt
+ffmpeg -f concat -safe 0 -i /tmp/list.txt -c:v ffv1 -pix_fmt bgra -an results/demo/1_fight_src.mkv
+```
+
+- `fight_4RqDG4I4iAk.mkv` — `NonFight/4RqDG4I4iAk_0`, `Fight/…_0`, `Fight/…_1`, `NonFight/…_1`.
+- `calm_oUqxGhTe.mkv` — `NonFight/oUqxGhTe_0` тричі.
+
+Кліпи однієї сцени мають однакові розмір і частоту кадрів, тож `concat` склеює їх без масштабування. Демо-відео з
+оверлеєм (крок 2) склеєно інакше: `sentinel demo --source a.avi b.avi …` декодує оригінали один за одним і зсуває час
+(`results/demo/make_demo.sh`).
+
 **З `--paced`** (у темпі камери) ця сцена на межі порога. 10.10 тривога відкрилась:
 - `balanced` від мережі — 0 з 2;
 - `performance` на батареї — 3 з 5.
